@@ -29,14 +29,14 @@ SHEET_ID = '124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4'
 def load_data():
     try:
         sh = gc.open_by_key(SHEET_ID)
-        users_sheet = sh.get_worksheet(6)   # 7th tab - User Credentials
-        student_sheet = sh.get_worksheet(0) # 1st tab - Master Students List
-        log_sheet = sh.get_worksheet(1)     # 2nd tab - Attendance History
+        users_sheet = sh.get_worksheet(6)
+        student_sheet = sh.get_worksheet(0)
+        log_sheet = sh.get_worksheet(1)
         df_users = pd.DataFrame(users_sheet.get_all_records())
         return sh, df_users
     except Exception as e:
-        st.error(f"🚨 GOOGLE ACCESS DENIED: {e}")
-        st.info("Check: Kya aapne Sheet ko 'Anyone with the link' (Editor) kiya hai?")
+        st.error(f"🚨 ERROR: {str(e)}")
+        st.exception(e)
         st.stop()
 
 if gc:
