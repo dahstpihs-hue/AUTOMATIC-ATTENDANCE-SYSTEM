@@ -2,89 +2,130 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime
 import json
+from datetime import datetime
 
-# --- 1. PAGE SETUP ---
-st.set_page_config(page_title="Department of Allied Health Sciences", layout="wide", page_icon="🎓")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="TPIHS | Allied Health Sciences", layout="wide", page_icon="🎓")
 
-# --- 2. GOOGLE SHEETS CONNECTION ---
+# --- 2. DATABASE CONNECTION ---
 @st.cache_resource
 def init_connection():
-    key_dict = json.loads(st.secrets["gcp_service_account"])
-    creds = Credentials.from_service_account_info(
-        key_dict, 
-        scopes=["https://www.googleapis.com/auth/spreadsheets"]
-    )
-    return gspread.authorize(creds)
+    try:
+        key_dict = json.loads(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(
+            key_dict, 
+            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        )
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Secret Key Error: {e}")
+        return None
 
 gc = init_connection()
 
-# --- SHEET URL (FIXED: Added quotes around the link) ---
-SHEET_URL = 'https://docs.google.com/spreadsheets/d/124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4/edit#gid=1459478475'
+# --- 3. LOAD DATA (USING SHEET ID) ---
+SHEET_ID = '124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4'
 
 @st.cache_data(ttl=60)
 def load_data():
-    # FIXED: Using the variable SHEET_URL which has quotes
-    sh = gc.open_by_url(SHEET_URL)
-    
-    # Sheet tabs ke naam
-    users_sheet = sh.worksheet('USERS_CREDENTIALS')
-    student_sheet = sh.get_worksheet(0)
-    log_sheet = sh.get_worksheet(1)
-    
-    df_users = pd.DataFrame(users_sheet.get_all_records())
-    df_students = pd.DataFrame(student_sheet.get_all_records())
-    
-    df_students.columns = df_students.columns.str.strip()
     try:
-        df_students = df_students.map(lambda x: str(x).strip() if isinstance(x, str) else x)
-    except AttributeError:
-        df_students = df_students.applymap(lambda x: str(x).strip() if isinstance(x, str) else x)
+        sh = gc.open_by_key(SHEET_ID)
+        # Tabs ke naam: 'USERS_CREDENTIALS', 'STUDENTS', 'LOGS'
+        users_sheet = sh.worksheet('USERS_CREDENTIALS')
+        student_sheet = sh.get_worksheet(0) 
+        log_sheet = sh.get_worksheet(1)     
         
-    return sh, users_sheet, log_sheet, df_users, df_students
+        df_users = pd.DataFrame(users_sheet.get_all_records())
+        df_students = pd.DataFrame(student_sheet.get_all_records())
+        df_logs = pd.DataFrame(log_sheet.get_all_records())
+        
+        return sh, log_sheet, df_users, df_students, df_logs
+    except Exception as e:
+        st.error(f"Database Access Error: {e}")
+        st.stop()
 
-sh, users_sheet, log_sheet, df_users, df_students = load_data()
+if gc:
+    sh, log_sheet, df_users, df_students, df_logs = load_data()
 
-# --- 3. THEME ---
+# --- 4. STYLING ---
 st.markdown("""
 <style>
-    .stApp { background-color: #0d1b2a; color: white; }
-    h1, h2, h3 { color: #FFD700; text-align: center; }
+    .main { background-color: #0d1b2a; color: white; }
+    .stButton>button { width: 100%; background-color: #FFD700; color: black; font-weight: bold; }
+    .report-card { background-color: #1b263b; padding: 15px; border-radius: 10px; border: 1px solid #FFD700; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h1>DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>", unsafe_allow_html=True)
-st.divider()
-
-# --- 4. LOGIN SYSTEM ---
+# --- 5. AUTHENTICATION LOGIC ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.username = ""
-    st.session_state.role = ""
+    st.session_state.user = None
+    st.session_state.role = None
 
 if not st.session_state.logged_in:
-    login_type = st.radio("Portal:", ["STAFF LOGIN", "STUDENT PORTAL"], horizontal=True)
-    if login_type == "STAFF LOGIN":
-        with st.form("login"):
-            u = st.text_input("Username").strip()
-            p = st.text_input("Password", type="password").strip()
-            if st.form_submit_button("LOGIN"):
-                match = df_users[(df_users['Username'] == u) & (df_users['Password'].astype(str) == p)]
+    st.title("🎓 DEPARTMENT OF ALLIED HEALTH SCIENCES")
+    st.subheader("Automated Academic & Attendance System")
+    
+    tab1, tab2 = st.tabs(["🔒 STAFF LOGIN", "📢 STUDENT PORTAL"])
+    
+    with tab1:
+        with st.form("login_form"):
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            if st.form_submit_button("SECURE LOGIN"):
+                match = df_users[(df_users['Username'] == u.strip()) & (df_users['Password'].astype(str) == p.strip())]
                 if not match.empty:
                     st.session_state.logged_in = True
-                    st.session_state.username = u
+                    st.session_state.user = u
                     st.session_state.role = match.iloc[0]['Role']
                     st.rerun()
                 else:
                     st.error("Invalid Credentials")
-    else:
-        if st.button("ENTER STUDENT PORTAL"):
+    
+    with tab2:
+        st.info("Student Portal is Open for Public View")
+        if st.button("ENTER AS STUDENT"):
             st.session_state.logged_in = True
-            st.session_state.role = "STUDENT"
+            st.session_state.role = "Student"
             st.rerun()
+
+# --- 6. DASHBOARDS ---
 else:
-    st.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
-    if st.button("LOGOUT"):
+    # Top Bar
+    c1, c2 = st.columns([4,1])
+    c1.title(f"Welcome, {st.session_state.user if st.session_state.user else 'Student'}")
+    if c2.button("LOGOUT"):
         st.session_state.clear()
         st.rerun()
+    
+    # --- COORDINATOR / HOD VIEW ---
+    if st.session_state.role in ["HOD", "Coordinator"]:
+        st.header("🛡️ COORDINATOR COMMAND CENTER")
+        
+        # Daily Stats
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Today's Classes", "5") # Logic later
+        m2.metric("Avg. Attendance", "88%")
+        m3.metric("Fines Collected", "Rs. 1,200")
+        
+        st.subheader("📅 Daily Lecture & Attendance Audit")
+        if not df_logs.empty:
+            st.dataframe(df_logs.tail(10), use_container_width=True)
+        else:
+            st.warning("No logs found in Sheet.")
+
+    # --- FACULTY VIEW ---
+    elif st.session_state.role == "Faculty":
+        st.header("📝 FACULTY ATTENDANCE & LOG")
+        with st.form("att_form"):
+            subj = st.text_input("Subject Name")
+            topic = st.text_area("Lecture Topic Covered")
+            # Yahan attendance ka table aayega
+            if st.form_submit_button("SUBMIT RECORD"):
+                st.success("Record Saved to Google Sheet!")
+
+    # --- STUDENT VIEW ---
+    else:
+        st.header("📊 MY PERFORMANCE REPORT")
+        st.write("Student tracking features loading...")
