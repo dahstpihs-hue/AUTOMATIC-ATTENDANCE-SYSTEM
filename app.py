@@ -21,7 +21,7 @@ def init_connection():
 gc = init_connection()
 
 # ⚠️ YAHAN APNI GOOGLE SHEET KA ASLI LINK PASTE KAREIN (Single quotes ke andar)
-SHEET_URL = 'YAHAN_LINK_PASTE_KAREIN'
+SHEET_URL = 'https://docs.google.com/spreadsheets/d/124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4/edit?gid=1459478475#gid=1459478475'
 
 @st.cache_data(ttl=60)
 def load_data():
