@@ -25,7 +25,7 @@ SHEET_URL = 'https://docs.google.com/spreadsheets/d/124hfxw0Y1QQSe1VpPA2LZrhG8cq
 
 @st.cache_data(ttl=60)
 def load_data():
-    sh = gc.open_by_url(SHEET_URL)
+    sh = gc.open_by_url(https://docs.google.com/spreadsheets/d/124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4/edit?gid=1459478475#gid=1459478475)
     
     users_sheet = sh.worksheet('USERS_CREDENTIALS')
     student_sheet = sh.get_worksheet(0)
