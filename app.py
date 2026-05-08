@@ -8,7 +8,7 @@ import json
 # --- 1. PAGE SETUP ---
 st.set_page_config(page_title="Department of Allied Health Sciences", layout="wide", page_icon="🎓")
 
-# --- 2. GOOGLE SHEETS CONNECTION (Via Streamlit Secrets) ---
+# --- 2. GOOGLE SHEETS CONNECTION ---
 @st.cache_resource
 def init_connection():
     key_dict = json.loads(st.secrets["gcp_service_account"])
@@ -21,12 +21,12 @@ def init_connection():
 gc = init_connection()
 SHEET_NAME = 'Department_Database'
 
-@st.cache_data(ttl=60) # Auto-refresh every 60 seconds
+@st.cache_data(ttl=60)
 def load_data():
     sh = gc.open(SHEET_NAME)
     users_sheet = sh.worksheet('USERS_CREDENTIALS')
-    student_sheet = sh.get_worksheet(0) # Tab 1
-    log_sheet = sh.get_worksheet(1)     # Tab 2
+    student_sheet = sh.get_worksheet(0)
+    log_sheet = sh.get_worksheet(1)
     
     df_users = pd.DataFrame(users_sheet.get_all_records())
     df_students = pd.DataFrame(student_sheet.get_all_records())
@@ -36,25 +36,20 @@ def load_data():
 
 sh, users_sheet, log_sheet, df_users, df_students = load_data()
 
-# --- 3. ELITE DEEP DARK BLUE THEME ---
+# --- 3. THEME ---
 st.markdown("""
 <style>
     .stApp { background-color: #0d1b2a; color: white; }
-    .css-1d391kg { background-color: #1b263b; }
     h1, h2, h3 { color: #FFD700; text-align: center; }
     .welcome-text { text-align: center; font-size: 24px; font-weight: bold; color: white; }
     .success-box { background-color: #001d3d; padding: 20px; border: 2px solid #FFD700; border-radius: 10px; text-align: center; margin-top: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. HEADER & LOGOS ---
-col1, col2, col3 = st.columns([1, 2, 1])
-with col1: st.image("TPIHS LOGO.png", use_container_width=True)
-with col2:
-    st.markdown("<h1>WELCOME TO THE</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;'><img src='TPIHS 2.png' width='80'></p>", unsafe_allow_html=True) # Fallback if direct image issues occur
-    st.markdown("<p class='welcome-text'>DEPARTMENT OF ALLIED HEALTH SCIENCES</p>", unsafe_allow_html=True)
-with col3: st.image("FACULTY OF ALLIED HEALTH SCIENCES.PNG", use_container_width=True)
+# --- 4. HEADER (WITHOUT IMAGES FOR NOW) ---
+st.markdown("<h1>WELCOME TO THE</h1>", unsafe_allow_html=True)
+st.markdown("<p class='welcome-text'>DEPARTMENT OF ALLIED HEALTH SCIENCES</p>", unsafe_allow_html=True)
+st.divider()
 
 # --- 5. SYSTEM LOGIN LOGIC ---
 if 'logged_in' not in st.session_state:
@@ -91,7 +86,7 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = user_val
                     st.session_state.role = user_data['Role']
-                    st.session_state.row_idx = match.index[0] + 2 # Google Sheet rows start at 1 + 1 for header
+                    st.session_state.row_idx = match.index[0] + 2
                     
                     if str(user_data['Is_First_Login']).strip().upper() == 'TRUE':
                         st.session_state.must_change_pass = True
