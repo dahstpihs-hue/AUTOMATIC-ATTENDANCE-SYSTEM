@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 
 # --- 1. PAGE SETUP ---
-st.set_page_config(page_title="Department of Allied Health Sciences", layout="wide", page_icon="🎓")
+st.set_page_config(page_title="AUTOMATIC ATTENDANCE SYSTEM", layout="wide", page_icon="🎓")
 
 # --- 2. GOOGLE SHEETS CONNECTION ---
 @st.cache_resource
@@ -19,11 +19,15 @@ def init_connection():
     return gspread.authorize(creds)
 
 gc = init_connection()
-SHEET_NAME = 'Department_Database'
+
+# ⚠️ YAHAN APNI GOOGLE SHEET KA MUKAMMAL LINK PASTE KAREIN (Single quotes ke andar)
+SHEET_URL = 'YAHAN_APNI_SHEET_KA_LINK_PASTE_KAREIN'
 
 @st.cache_data(ttl=60)
 def load_data():
-    sh = gc.open(SHEET_NAME)
+    # Ab system naam ke bajaye direct Link se sheet dhoondega (100% error-free)
+    sh = gc.open_by_url(SHEET_URL)
+    
     users_sheet = sh.worksheet('USERS_CREDENTIALS')
     student_sheet = sh.get_worksheet(0)
     log_sheet = sh.get_worksheet(1)
@@ -146,96 +150,4 @@ else:
                         <h3 style='color:#FFD700;'>👤 RECORD: {clean_name}</h3>
                         <p style='color:white; font-size:18px;'><b>Total Classes Conducted:</b> {len(my_logs)}</p>
                         <p style='color:#dc3545; font-size:18px;'><b>Total Absents:</b> {absents}</p>
-                        <p style='color:#28a745; font-size:22px;'><b>Total Fine Due:</b> Rs. {fines} PKR</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.warning("No attendance records found in the database yet.")
-
-    # --- B) FACULTY DASHBOARD ---
-    elif st.session_state.role == "Faculty":
-        st.header("🎓 FACULTY REGULATORY PORTAL")
-        with st.form("faculty_form"):
-            c1, c2 = st.columns(2)
-            instructor = c1.text_input("Instructor Name", value=st.session_state.username.upper())
-            inst_dept = c2.selectbox("Instructor Dept", ['Radiology', 'MLT', 'Dental', 'Anaesthesia', 'Pharmacy', 'Nursing'])
-            
-            c3, c4, c5 = st.columns(3)
-            disc = c3.selectbox("Discipline to Teach", ['Radiology', 'MLT', 'Dental', 'Anaesthesia'])
-            batch = c4.selectbox("Batch", sorted(list(df_students['BATCH'].unique())))
-            day = c5.selectbox("Day", ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], index=datetime.now().weekday() if datetime.now().weekday() < 6 else 0)
-            
-            c6, c7, c8 = st.columns(3)
-            slot = c6.selectbox("Lecture Slot", ['1', '2', '3', '4'])
-            times = ['08:00 AM', '08:30 AM', '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM']
-            start_time = c7.selectbox("Start Time", times[:-1])
-            end_time = c8.selectbox("End Time", times[1:])
-            
-            subject = st.text_input("Subject Name (CAPITAL)")
-            topic = st.text_area("Lecture Record & Discussion Topic")
-            
-            st.markdown("### 📋 LOADED STUDENT LIST")
-            match = df_students[(df_students['BATCH'].astype(str) == str(batch)) & (df_students['DISCIPLINE'] == disc)]
-            sem = match.iloc[0]['SEMESTER'] if not match.empty else "N/A"
-            st.caption(f"Semester Picked: {sem}")
-            
-            attendance_data = []
-            if not match.empty:
-                for i, r in match.iterrows():
-                    f_name = r.get('Father Name', 'N/A')
-                    s_name = r['STUDENT NAME']
-                    col_name, col_att = st.columns([2, 3])
-                    col_name.write(f"**{s_name}** (S/O {f_name})")
-                    status = col_att.radio(f"Status for {s_name}", ['P', 'A', 'L', 'S/L'], horizontal=True, key=f"att_{i}", label_visibility="collapsed")
-                    attendance_data.append({'name': s_name, 'father': f_name, 'status': status})
-            else:
-                st.warning("No students found. Check Batch and Discipline.")
-                
-            submitted = st.form_submit_button("SUBMIT TO DATABASE")
-            
-            if submitted:
-                if not subject or not attendance_data:
-                    st.error("❌ Mandatory fields missing (Subject or Student List).")
-                else:
-                    real_date = datetime.now().strftime("%Y-%m-%d")
-                    real_ts = datetime.now().strftime("%H:%M:%S")
-                    fmt = '%I:%M %p'
-                    try:
-                        tdelta = datetime.strptime(end_time, fmt) - datetime.strptime(start_time, fmt)
-                        duration = f"{int(tdelta.seconds / 60)} Mins"
-                    except: duration = "N/A"
-                    
-                    final_rows = []
-                    total_fines = 0
-                    for s in attendance_data:
-                        fine = 100 if s['status'] == 'A' else 0
-                        total_fines += fine
-                        final_rows.append([real_date, real_ts, day, slot, instructor.upper(), inst_dept, disc, subject.upper(), start_time, end_time, duration, topic, s['name'], s['father'], s['status'], fine, batch, sem])
-                    
-                    log_sheet.append_rows(final_rows)
-                    st.markdown(f"""
-                    <div class='success-box'>
-                        <h2 style='color: #28a745;'>✅ CONGRATULATIONS, YOUR ALL DATA HAS BEEN RECORDED</h2>
-                        <p style='color: white; font-size: 16px;'><b>Timestamp:</b> {real_date} at {real_ts}</p>
-                        <p style='color: white; font-size: 16px;'><b>Total Absentees Fined:</b> Rs. {total_fines} PKR</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-    # --- C) HOD / ADMIN DASHBOARD ---
-    elif st.session_state.role in ["HOD", "Coordinator"]:
-        st.header(f"🛡️ EXECUTIVE PANEL: {st.session_state.role}")
-        df_logs = pd.DataFrame(log_sheet.get_all_records())
-        if not df_logs.empty:
-            total_classes = len(df_logs['Timestamp'].unique())
-            total_absents = len(df_logs[df_logs['Status'] == 'A'])
-            total_fines = df_logs['Fine (Rs. 100)'].replace('', 0).astype(int).sum() if 'Fine (Rs. 100)' in df_logs.columns else 0
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("TOTAL CLASSES", total_classes)
-            c2.metric("TOTAL ABSENTEES", total_absents)
-            c3.metric("FINES GENERATED", f"Rs. {total_fines}")
-            
-            st.subheader("🔍 SYSTEM TRACKING LOGS")
-            st.dataframe(df_logs.tail(20).iloc[::-1], use_container_width=True)
-        else:
-            st.info("No tracking data available yet.")
+                        <p style='color:#28a745; font-size:22px;'><b>Total Fine Due:</b> Rs. {fines} PKR
