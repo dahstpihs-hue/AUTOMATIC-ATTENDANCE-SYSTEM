@@ -29,9 +29,9 @@ SHEET_ID = '124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4'
 def load_data():
     try:
         sh = gc.open_by_key(SHEET_ID)
-        users_sheet = sh.get_worksheet(0)
-        student_sheet = sh.get_worksheet(1)
-        log_sheet = sh.get_worksheet(2)
+        users_sheet = sh.get_worksheet(6)   # 7th tab - User Credentials
+        student_sheet = sh.get_worksheet(0) # 1st tab - Master Students List
+        log_sheet = sh.get_worksheet(1)     # 2nd tab - Attendance History
         df_users = pd.DataFrame(users_sheet.get_all_records())
         return sh, df_users
     except Exception as e:
