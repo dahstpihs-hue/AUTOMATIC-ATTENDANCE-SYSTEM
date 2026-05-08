@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 
 # --- 1. PAGE SETUP ---
-st.set_page_config(page_title="AUTOMATIC ATTENDANCE SYSTEM", layout="wide", page_icon="🎓")
+st.set_page_config(page_title="Department of Allied Health Sciences", layout="wide", page_icon="🎓")
 
 # --- 2. GOOGLE SHEETS CONNECTION ---
 @st.cache_resource
@@ -20,12 +20,11 @@ def init_connection():
 
 gc = init_connection()
 
-# ⚠️ YAHAN APNI GOOGLE SHEET KA MUKAMMAL LINK PASTE KAREIN (Single quotes ke andar)
-SHEET_URL = 'YAHAN_APNI_SHEET_KA_LINK_PASTE_KAREIN'
+# ⚠️ YAHAN APNI GOOGLE SHEET KA ASLI LINK PASTE KAREIN (Single quotes ke andar)
+SHEET_URL = 'YAHAN_LINK_PASTE_KAREIN'
 
 @st.cache_data(ttl=60)
 def load_data():
-    # Ab system naam ke bajaye direct Link se sheet dhoondega (100% error-free)
     sh = gc.open_by_url(SHEET_URL)
     
     users_sheet = sh.worksheet('USERS_CREDENTIALS')
@@ -35,7 +34,12 @@ def load_data():
     df_users = pd.DataFrame(users_sheet.get_all_records())
     df_students = pd.DataFrame(student_sheet.get_all_records())
     df_students.columns = df_students.columns.str.strip()
-    df_students = df_students.applymap(lambda x: str(x).strip() if isinstance(x, str) else x)
+    # Pandas applymap warning fix
+    try:
+        df_students = df_students.map(lambda x: str(x).strip() if isinstance(x, str) else x)
+    except AttributeError:
+        df_students = df_students.applymap(lambda x: str(x).strip() if isinstance(x, str) else x)
+        
     return sh, users_sheet, log_sheet, df_users, df_students
 
 sh, users_sheet, log_sheet, df_users, df_students = load_data()
@@ -50,7 +54,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. HEADER (WITHOUT IMAGES FOR NOW) ---
+# --- 4. HEADER ---
 st.markdown("<h1>WELCOME TO THE</h1>", unsafe_allow_html=True)
 st.markdown("<p class='welcome-text'>DEPARTMENT OF ALLIED HEALTH SCIENCES</p>", unsafe_allow_html=True)
 st.divider()
@@ -90,64 +94,3 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = user_val
                     st.session_state.role = user_data['Role']
-                    st.session_state.row_idx = match.index[0] + 2
-                    
-                    if str(user_data['Is_First_Login']).strip().upper() == 'TRUE':
-                        st.session_state.must_change_pass = True
-                    st.rerun()
-                else:
-                    st.error("❌ INCORRECT USERNAME OR PASSWORD")
-
-# --- 6. FORCE PASSWORD RESET ---
-elif st.session_state.must_change_pass:
-    st.warning(f"⚠️ SECURITY ALERT: Welcome {st.session_state.username}. You must change your default password to proceed.")
-    with st.form("pass_reset"):
-        new_pass = st.text_input("New Password", type="password")
-        confirm_pass = st.text_input("Confirm Password", type="password")
-        if st.form_submit_button("UPDATE PASSWORD"):
-            if new_pass and new_pass == confirm_pass:
-                users_sheet.update_cell(st.session_state.row_idx, 5, new_pass)
-                users_sheet.update_cell(st.session_state.row_idx, 6, 'FALSE')
-                st.session_state.must_change_pass = False
-                st.success("✅ Password Updated! Please click 'Log Out' and log in again.")
-            else:
-                st.error("❌ Passwords do not match.")
-
-# --- 7. MULTI-TIER DASHBOARDS ---
-else:
-    col_a, col_b = st.columns([4, 1])
-    col_a.write(f"Logged in as: **{st.session_state.username}** | Role: **{st.session_state.role}**")
-    if col_b.button("LOGOUT"):
-        st.session_state.clear()
-        st.rerun()
-    st.divider()
-
-    # --- A) STUDENT DASHBOARD ---
-    if st.session_state.role == "STUDENT":
-        st.header("🧑‍🎓 STUDENT TRANSPARENCY PORTAL")
-        c1, c2 = st.columns(2)
-        disc = c1.selectbox("Discipline", ['Radiology', 'MLT', 'Dental', 'Anaesthesia'])
-        batch = c2.selectbox("Batch", sorted(list(df_students['BATCH'].unique())))
-        
-        match = df_students[(df_students['BATCH'].astype(str) == str(batch)) & (df_students['DISCIPLINE'] == disc)]
-        sem = match.iloc[0]['SEMESTER'] if not match.empty else "N/A"
-        st.info(f"**Detected Semester:** {sem}")
-        
-        if not match.empty:
-            student_list = [f"{r['STUDENT NAME']} (S/O {r.get('Father Name','')})" for i, r in match.iterrows()]
-            selected_student = st.selectbox("Select Your Name", student_list)
-            
-            if st.button("VIEW MY RECORD"):
-                clean_name = selected_student.split(" (S/O")[0].strip()
-                df_logs = pd.DataFrame(log_sheet.get_all_records())
-                if not df_logs.empty:
-                    my_logs = df_logs[df_logs['Student Name'].astype(str).str.strip() == clean_name]
-                    absents = len(my_logs[my_logs['Status'] == 'A'])
-                    fines = my_logs['Fine (Rs. 100)'].replace('', 0).astype(int).sum() if 'Fine (Rs. 100)' in my_logs.columns else absents * 100
-                    
-                    st.markdown(f"""
-                    <div class='success-box'>
-                        <h3 style='color:#FFD700;'>👤 RECORD: {clean_name}</h3>
-                        <p style='color:white; font-size:18px;'><b>Total Classes Conducted:</b> {len(my_logs)}</p>
-                        <p style='color:#dc3545; font-size:18px;'><b>Total Absents:</b> {absents}</p>
-                        <p style='color:#28a745; font-size:22px;'><b>Total Fine Due:</b> Rs. {fines} PKR
