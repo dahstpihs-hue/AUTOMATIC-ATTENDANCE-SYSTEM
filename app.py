@@ -23,12 +23,12 @@ def init_connection():
 gc = init_connection()
 
 # --- 3. LOAD DATA ---
-SHEET_ID = '124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4'
+SHEET_URL = 'https://docs.google.com/spreadsheets/d/124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4/edit'
 
 @st.cache_data(ttl=60)
 def load_data():
     try:
-        sh = gc.open_by_key(SHEET_ID)
+        sh = gc.open_by_url(SHEET_URL)
         users_sheet = sh.get_worksheet(6)
         student_sheet = sh.get_worksheet(0)
         log_sheet = sh.get_worksheet(1)
