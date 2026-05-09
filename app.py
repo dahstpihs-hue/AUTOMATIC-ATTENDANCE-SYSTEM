@@ -4,37 +4,53 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from datetime import datetime
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(page_title="PIHS Mardan Command Center", layout="wide")
+# --- 1. PAGE CONFIGURATION ---
+st.set_page_config(page_title="PIHS Mardan Portal", layout="wide")
 
 SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
 SHEET_ID = "124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4"
 
-# --- ELITE CSS & BLINKING WARNINGS ---
+# --- 2. ELITE CSS FOR CLEAN INTERFACE ---
 st.markdown("""
     <style>
     .main { background-color: #0d1b2a; color: white; }
+    
     @keyframes blinker { 50% { opacity: 0; } }
     .blinking-text {
-        font-family: 'Arial Black'; font-size: 30px; color: #FFD700;
-        animation: blinker 1.5s linear infinite; text-align: center;
+        font-family: 'Arial Black', sans-serif;
+        font-size: 32px;
+        color: #FFD700;
+        animation: blinker 1.5s linear infinite;
+        text-align: center;
+        text-shadow: 0 0 20px #FFA500;
     }
-    .critical-alert {
-        color: #ff4b4b; font-weight: bold; animation: blinker 1s linear infinite;
-        background-color: rgba(255, 75, 75, 0.1); padding: 10px; border-radius: 5px;
-    }
-    .stats-card {
-        background-color: #1b263b; padding: 20px; border-radius: 15px;
-        border-top: 4px solid #FFD700; text-align: center;
-    }
+    
     .gateway-master { 
-        background-color: #001d3d; padding: 20px; border-radius: 20px; 
-        border: 2px solid #FFD700; text-align: center; margin-bottom: 20px;
+        background-color: #001d3d; 
+        padding: 40px; 
+        border-radius: 20px; 
+        border: 2px solid #FFD700; 
+        box-shadow: 0px 10px 40px rgba(0,0,0,0.9);
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    
+    .login-box {
+        background-color: #1b263b;
+        padding: 30px;
+        border-radius: 15px;
+        border: 1px solid #415a77;
+    }
+    
+    .stButton>button { 
+        width: 100%; 
+        background-color: #28a745; 
+        color: white; font-weight: bold; border-radius: 8px; height: 3em;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. BACKEND ENGINES ---
+# --- 3. BACKEND FUNCTIONS ---
 def get_service():
     creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO)
     return build('sheets', 'v4', credentials=creds)
@@ -50,66 +66,57 @@ def get_data(range_name):
         return df
     except: return pd.DataFrame()
 
-# --- 3. HEADER ---
-st.markdown('<div class="gateway-master"><div class="blinking-text">WELCOME TO THE</div><h1 style="color:white;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1><p style="color:#FFD700;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p></div>', unsafe_allow_html=True)
+# --- 4. THE WELCOME GATEWAY ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
 
-# --- 4. DASHBOARD LOGIC (HOD & COORDINATOR) ---
-if 'logged_in' in st.session_state and st.session_state.logged_in:
-    u = st.session_state.user
-    role = u['Role']
+# Sirf ye portion nazar aayega login se pehle
+st.markdown("""
+<div class="gateway-master">
+    <div class="blinking-text">WELCOME TO THE</div>
+    <h1 style="color:white; font-size:26px; letter-spacing: 2px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
+    <p style="color:#FFD700; font-size:18px;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p>
+</div>
+""", unsafe_allow_html=True)
 
-    if role in ['HOD', 'COORDINATOR']:
-        st.title("📊 Institutional Analytics & Warning System")
+# --- 5. LOGIN SECTION ---
+if not st.session_state.logged_in:
+    users_df = get_data("USERS_CREDENTIALS!A:F")
+    
+    cols = st.columns([1, 1.5, 1])
+    with cols[1]:
+        st.markdown("<div class='login-box'>", unsafe_allow_html=True)
+        role = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'Faculty', 'Student'])
         
-        df_stu = get_data("STUDENTS LIST!A:Z")
-        df_att = get_data("ATTENDANCE HISTORY!A:R")
-
-        if not df_att.empty:
-            # --- OVERALL PERCENTAGE CALCULATION ---
-            # Har student ki total classes aur presents nikalna
-            attendance_summary = df_att.groupby('STUDENT NAME').agg({
-                'Status': lambda x: (list(x).count('P') / len(x)) * 100
-            }).reset_index()
-            attendance_summary.columns = ['Student Name', 'Percentage']
-
-            # --- SUBJECT-WISE PERCENTAGE ---
-            subject_summary = df_att.groupby(['STUDENT NAME', 'Subject']).agg({
-                'Status': lambda x: (list(x).count('P') / len(x)) * 100
-            }).reset_index()
-            subject_summary.columns = ['Student Name', 'Subject', 'Subject %']
-
-            # --- 5. CRITICAL WARNING PANEL (Blinking) ---
-            st.subheader("🚨 Critical Attendance Warnings (Below 75%)")
-            low_attendance = attendance_summary[attendance_summary['Percentage'] < 75]
+        if role != '-- SELECT ROLE --':
+            if role == 'Faculty':
+                names = users_df[users_df['Role'] == 'Faculty']['Full Name'].tolist()
+                user_sel = st.selectbox("Select Your Name:", names)
             
-            if not low_attendance.empty:
-                for idx, row in low_attendance.iterrows():
-                    name = row['Student Name']
-                    perc = row['Percentage']
-                    
-                    # Blinking warning for overall attendance
-                    st.markdown(f"""
-                        <div class="critical-alert">
-                            ⚠️ WARNING: {name} has {perc:.1f}% Overall Attendance!
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Specific subject warnings for this student
-                    sub_low = subject_summary[(subject_summary['Student Name'] == name) & (subject_summary['Subject %'] < 75)]
-                    if not sub_low.empty:
-                        with st.expander(f"View Subject Details for {name}"):
-                            for _, sub_row in sub_low.iterrows():
-                                st.write(f"❌ {sub_row['Subject']}: {sub_row['Subject %']:.1f}%")
-                st.markdown("---")
-            else:
-                st.success("✅ All students are above 75% overall.")
+            pwd = st.text_input("Enter Password", type="password")
+            
+            if st.button("Access Dashboard"):
+                # Authentication Logic
+                if role == 'HOD' or role == 'COORDINATOR':
+                    match = users_df[(users_df['Role'] == role) & (users_df['Password'] == pwd)]
+                else:
+                    match = users_df[(users_df['Full Name'] == user_sel) & (users_df['Password'] == pwd)]
+                
+                if not match.empty:
+                    st.session_state.logged_in = True
+                    st.session_state.user = match.iloc[0].to_dict()
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error("Invalid Credentials")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        # Summary Cards (As before)
-        c1, c2 = st.columns(2)
-        c1.metric("Total RAD Students", len(df_stu[df_stu['DISCIPLINE'] == 'RADIOLOGY']))
-        c2.metric("Total MLT Students", len(df_stu[df_stu['DISCIPLINE'] == 'MLT']))
-
-    # --- 6. STUDENT VIEW (As before) ---
-    if role == 'Student':
-        st.title("👨‍🎓 My Detailed Attendance Report")
-        # Student specific search and 75% check
+# --- 6. LOGGED IN CONTENT ---
+else:
+    u = st.session_state.user
+    st.sidebar.success(f"User: {u['Full Name']}")
+    st.title(f"🛡️ {u['Role']} Dashboard")
+    
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
