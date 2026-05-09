@@ -3,7 +3,6 @@ import pandas as pd
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from datetime import datetime
-import base64
 import time
 
 # --- CONFIGURATION ---
@@ -17,45 +16,25 @@ SHEET_ID = "124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4"
 st.markdown("""
     <style>
     .main { background-color: #0d1b2a; color: white; }
-    
     @keyframes blinker { 50% { opacity: 0; } }
     .blinking-text {
-        font-family: 'Arial Black', sans-serif;
-        font-size: 32px;
-        color: #FFD700;
-        animation: blinker 1.5s linear infinite;
-        text-align: center;
-        text-shadow: 0 0 20px #FFA500;
-        margin-bottom: 0px;
+        font-family: 'Arial Black'; font-size: 32px; color: #FFD700;
+        animation: blinker 1.5s linear infinite; text-align: center;
+        text-shadow: 0 0 20px #FFA500; margin-bottom: 0px;
     }
-    
     .gateway-master { 
-        background-color: #001d3d; 
-        padding: 25px; 
-        border-radius: 20px; 
-        border: 2px solid #FFD700; 
-        box-shadow: 0px 10px 40px rgba(0,0,0,0.9);
-        text-align: center;
-        margin-bottom: 20px;
+        background-color: #001d3d; padding: 25px; border-radius: 20px; 
+        border: 2px solid #FFD700; box-shadow: 0px 10px 40px rgba(0,0,0,0.9);
+        text-align: center; margin-bottom: 20px;
     }
-
     .stButton>button { 
-        width: 100%; 
-        background-image: linear-gradient(to right, #28a745, #218838); 
+        width: 100%; background-image: linear-gradient(to right, #28a745, #218838); 
         color: white; font-weight: bold; border-radius: 10px; height: 3.5em; border: none;
-    }
-    
-    /* Login Box Styling */
-    .login-container {
-        background-color: #1b263b;
-        padding: 30px;
-        border-radius: 15px;
-        border: 1px solid #415a77;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- BACKEND ENGINES ---
+# --- BACKEND FUNCTIONS ---
 def get_service():
     creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO)
     return build('sheets', 'v4', credentials=creds)
@@ -71,10 +50,20 @@ def get_data(range_name):
         return df
     except: return pd.DataFrame()
 
+def submit_attendance(rows):
+    try:
+        service = get_service()
+        body = {'values': rows}
+        service.spreadsheets().values().append(
+            spreadsheetId=SHEET_ID, range="ATTENDANCE HISTORY!A:R",
+            valueInputOption="RAW", body=body).execute()
+        return True
+    except: return False
+
 # --- HEADER & CELEBRATION ---
-if 'first_load' not in st.session_state:
+if 'logged_in' not in st.session_state:
     st.balloons()
-    st.session_state.first_load = False
+    st.session_state.logged_in = False
 
 st.markdown("""
 <div class="gateway-master">
@@ -84,23 +73,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- AUTHENTICATION ENGINE ---
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-
+# --- LOGIN LOGIC ---
 if not st.session_state.logged_in:
-    # Fetching latest credentials from USERS_CREDENTIALS
     users_df = get_data("USERS_CREDENTIALS!A:F")
-    
     cols = st.columns([1, 1.5, 1])
     with cols[1]:
-        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align:center; color:white;'>🔒 SYSTEM AUTHENTICATION</h3>", unsafe_allow_html=True)
-        
+        st.subheader("🔒 SYSTEM AUTHENTICATION")
         role_selection = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'FACULTY MEMBER', 'STUDENT'])
         
         if role_selection in ['HOD', 'COORDINATOR']:
-            # Direct Password for HOD/Coordinator
             pass_input = st.text_input("SYSTEM PASSWORD", type="password")
             if st.button("AUTHORIZE & ENTER"):
                 match = users_df[(users_df['Role'] == role_selection) & (users_df['Password'] == pass_input)]
@@ -111,7 +92,6 @@ if not st.session_state.logged_in:
                 else: st.error("❌ Invalid Password!")
 
         elif role_selection == 'FACULTY MEMBER':
-            # Select Name first as instructed
             faculty_list = users_df[users_df['Role'] == 'Faculty']['Full Name'].tolist()
             selected_faculty = st.selectbox("SELECT YOUR NAME:", faculty_list)
             pass_input = st.text_input("PERSONAL PASSWORD", type="password")
@@ -128,33 +108,37 @@ if not st.session_state.logged_in:
                 st.session_state.logged_in = True
                 st.session_state.user_data = {'Role': 'Student', 'Full Name': 'Student Access'}
                 st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-
 else:
+    # --- DASHBOARD LOADED ---
     user = st.session_state.user_data
     role = user['Role']
-    
-    # --- SHARED SIDEBAR ---
     st.sidebar.markdown(f"### 📍 Welcome\n**{user['Full Name']}**")
     st.sidebar.info(f"Department: {user.get('Department', 'N/A')}")
     
-    # --- DASHBOARD LOGIC (HOD, Coordinator & Faculty are all Subject Teachers) ---
-    st.title(f"🛡️ {role} Dashboard")
-    
     if role in ['HOD', 'COORDINATOR', 'Faculty']:
-        st.markdown("### 📋 Faculty Regulatory Portal")
+        st.title(f"🛡️ {role} Dashboard")
+        tabs = st.tabs(["Mark Attendance", "Institutional Analytics", "Staff Monitoring"])
         
-        # Multi-tab system for HOD/Coordinator
-        if role in ['HOD', 'COORDINATOR']:
-            tabs = st.tabs(["Mark Attendance", "Institutional Analytics", "Staff Monitoring"])
-            active_tab = tabs[0]
-        else:
-            active_tab = st.container()
-
-        with active_tab:
-            st.write("Attendance, Batches, and Semester logic from Database...")
-            # Yahan aapka attendance marking logic load hoga
+        with tabs[0]: # Mark Attendance Section
+            st.markdown("### 📋 Faculty Regulatory Portal")
+            df_students = get_data("STUDENTS LIST!A:Z")
             
-    if st.sidebar.button("🚪 Secure Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
+            c1, c2 = st.columns(2)
+            disc = c1.selectbox("Discipline", df_students['DISCIPLINE'].unique() if not df_students.empty else [])
+            batch = c2.selectbox("Batch", df_students['BATCH'].unique() if not df_students.empty else [])
+            
+            # Auto-Semester Logic
+            match = df_students[(df_students['BATCH'] == batch) & (df_students['DISCIPLINE'] == disc)]
+            semester = match.iloc[0]['SEMESTER'] if not match.empty else "N/A"
+            st.info(f"Marking for: {semester} Semester")
+            
+            subj = st.text_input("Subject Name (e.g. Anatomy)")
+            topic = st.text_area("Lecture Summary")
+            
+            if not match.empty:
+                st.markdown("#### Particular Student List")
+                att_list = []
+                for i, r in match.iterrows():
+                    col1, col2 = st.columns([3, 2])
+                    stat = col2.radio(f"{r['STUDENT NAME']}", ["P", "A", "L", "S/L"], horizontal=True, key=f"s_{i}")
+                    att_list.append([r['STUDENT NAME'], r.get('Father Name', 'N/A'),
