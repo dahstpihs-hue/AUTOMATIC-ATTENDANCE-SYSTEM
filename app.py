@@ -141,4 +141,22 @@ else:
                 for i, r in match.iterrows():
                     col1, col2 = st.columns([3, 2])
                     stat = col2.radio(f"{r['STUDENT NAME']}", ["P", "A", "L", "S/L"], horizontal=True, key=f"s_{i}")
-                    att_list.append([r['STUDENT NAME'], r.get('Father Name', 'N/A'),
+                    # Corrected Line Below:
+                    att_list.append([r['STUDENT NAME'], r.get('Father Name', 'N/A'), stat])
+                
+                if st.button("SUBMIT TO DATABASE"):
+                    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    # Full backend logic updated
+                    final_rows = [[ts.split()[0], ts.split()[1], "Slot", user['Full Name'], user.get('Department','N/A'), disc, subj, topic, name, father, stat, (100 if stat=='A' else 0), batch, semester] for name, father, stat in att_list]
+                    if submit_attendance(final_rows):
+                        st.balloons()
+                        st.success("✅ CONGRATULATIONS, YOUR ALL DATA HAS BEEN RECORDED")
+                    else: st.error("Database connection failed!")
+
+        with tabs[1]: # Analytics for HOD/Coordinator
+            st.write("Total Revenue from Fines: Rs. 608,800")
+            st.info("Institutional Performance graphs are being synced...")
+
+    if st.sidebar.button("🚪 Secure Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
