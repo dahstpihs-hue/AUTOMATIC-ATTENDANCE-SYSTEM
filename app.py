@@ -7,18 +7,46 @@ from datetime import datetime
 # --- CONFIGURATION ---
 st.set_page_config(page_title="PIHS Mardan Portal", layout="wide")
 
+# Google Sheets Setup
 SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
 SHEET_ID = "124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4"
 
-# --- GLOWING UI STYLING ---
+# --- BLINKING & GLOWING UI STYLING ---
 st.markdown("""
     <style>
     .main { background-color: #0d1b2a; color: white; }
-    .gateway-master { background-color: #0d1b2a; padding: 20px; border-radius: 15px; text-align: center; border: 2px solid #1b263b; box-shadow: 0px 5px 20px rgba(0,0,0,0.8); }
-    .glow-welcome { color: #fff; animation: glow 1s infinite alternate; font-family: 'Arial Black'; font-size: 28px; }
-    @keyframes glow { from { text-shadow: 0 0 10px #FFD700; } to { text-shadow: 0 0 25px #FFA500; } }
-    .stButton>button { width: 100%; background-color: #28a745; color: white; font-weight: bold; border-radius: 8px; }
-    div[data-testid="stExpander"] { background-color: #1b263b; border: 1px solid #FFD700; }
+    
+    /* Blinking Animation */
+    @keyframes blinker {
+        50% { opacity: 0; }
+    }
+    .blinking-text {
+        font-family: 'Arial Black';
+        font-size: 32px;
+        color: #FFD700;
+        animation: blinker 1.5s linear infinite;
+        text-align: center;
+        text-shadow: 0 0 20px #FFA500;
+    }
+    
+    .gateway-master { 
+        background-color: #001d3d; 
+        padding: 30px; 
+        border-radius: 20px; 
+        border: 2px solid #FFD700; 
+        box-shadow: 0px 10px 40px rgba(0,0,0,0.9);
+        text-align: center;
+    }
+    
+    .stButton>button { 
+        width: 100%; 
+        background-image: linear-gradient(to right, #28a745, #218838); 
+        color: white; 
+        font-weight: bold; 
+        border-radius: 10px; 
+        height: 3.5em;
+        border: none;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -36,15 +64,15 @@ def get_data(range_name):
         df = pd.DataFrame(values[1:], columns=values[0])
         df.columns = df.columns.str.strip()
         return df
-    except Exception as e:
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
-# --- HEADER ---
+# --- HEADER & BALLOONS ---
+st.balloons()
 st.markdown("""
 <div class="gateway-master">
-    <h2 class="glow-welcome">WELCOME TO THE</h2>
-    <h1 style="color:white; font-size:22px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
-    <p style="color:#FFD700;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p>
+    <div class="blinking-text">WELCOME TO THE</div>
+    <h1 style="color:white; font-size:26px; letter-spacing: 2px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
+    <p style="color:#FFD700; font-size:18px;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -57,91 +85,51 @@ if not st.session_state.logged_in:
     
     cols = st.columns([1, 1.5, 1])
     with cols[1]:
-        st.subheader("🔒 SYSTEM LOGIN")
-        role_selection = st.selectbox("Login As:", ['-- SELECT ROLE --', 'HEAD OF ALLIED HEALTH SCIENCES', 'COORDINATOR OF ALLIED HEALTH SCIENCES', 'FACULTY MEMBER', 'STUDENT'])
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("🔒 SECURE GATEWAY ACCESS")
+        role_selection = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'FACULTY MEMBER', 'STUDENT'])
         
-        user_to_login = None
-        pass_input = ""
-
-        if role_selection in ['HEAD OF ALLIED HEALTH SCIENCES', 'COORDINATOR OF ALLIED HEALTH SCIENCES']:
-            pass_input = st.text_input("Enter Password", type="password")
-            if st.button("ENTER PORTAL"):
+        if role_selection in ['HOD', 'COORDINATOR']:
+            pass_input = st.text_input("ENTER SYSTEM PASSWORD", type="password")
+            if st.button("AUTHORIZE & ENTER"):
+                # Farooq bhai, logic 'Username' par base karegi
                 match = users_df[(users_df['Role'] == role_selection) & (users_df['Password'] == pass_input)]
                 if not match.empty:
                     st.session_state.logged_in = True
                     st.session_state.user_data = match.iloc[0].to_dict()
                     st.rerun()
-                else: st.error("Incorrect Password!")
+                else: st.error("❌ Invalid Password!")
 
         elif role_selection == 'FACULTY MEMBER':
-            faculty_names = users_df[users_df['Role'] == 'FACULTY MEMBER']['Full Name'].tolist()
-            selected_name = st.selectbox("Select Your Name:", faculty_names)
-            pass_input = st.text_input("Enter Password", type="password")
-            if st.button("VERIFY & ENTER"):
-                match = users_df[(users_df['Full Name'] == selected_name) & (users_df['Password'] == pass_input)]
+            # Haris, Asim, Aimal etc. ki list yahan aayegi
+            faculty_list = users_df[users_df['Role'] == 'Faculty']['Full Name'].tolist()
+            selected_faculty = st.selectbox("SELECT YOUR NAME:", faculty_list)
+            pass_input = st.text_input("PASSWORD", type="password")
+            if st.button("VERIFY FACULTY"):
+                match = users_df[(users_df['Full Name'] == selected_faculty) & (users_df['Password'] == pass_input)]
                 if not match.empty:
                     st.session_state.logged_in = True
                     st.session_state.user_data = match.iloc[0].to_dict()
                     st.rerun()
-                else: st.error("Invalid Credentials!")
+                else: st.error("❌ Incorrect Credentials")
 
         elif role_selection == 'STUDENT':
-            if st.button("ACCESS STUDENT PORTAL"):
+            if st.button("ENTER STUDENT PORTAL"):
                 st.session_state.logged_in = True
-                st.session_state.user_data = {'Role': 'STUDENT', 'Full Name': 'Student'}
+                st.session_state.user_data = {'Role': 'Student', 'Full Name': 'Guest Student'}
                 st.rerun()
 
 else:
     user = st.session_state.user_data
-    role = user['Role']
+    st.sidebar.success(f"User: {user['Full Name']}")
+    st.title(f"🛡️ {user['Role']} Dashboard - PIHS Mardan")
     
-    st.sidebar.markdown(f"### Welcome\n**{user['Full Name']}**")
-    st.sidebar.caption(f"Role: {role}")
-
-    # --- SHARED ATTENDANCE FUNCTIONALITY (For HOD, Coord, Faculty) ---
-    def mark_attendance_section():
-        st.markdown("<h2 style='color:#FFD700;'>📋 MARK CLASS ATTENDANCE</h2>", unsafe_allow_html=True)
-        df_students = get_data("STUDENTS LIST!A:Z")
-        
-        c1, c2 = st.columns(2)
-        disc = c1.selectbox("Discipline", df_students['DISCIPLINE'].unique() if not df_students.empty else [])
-        batch = c2.selectbox("Batch", df_students['BATCH'].unique() if not df_students.empty else [])
-        
-        student_match = df_students[(df_students['BATCH'] == batch) & (df_students['DISCIPLINE'] == disc)]
-        semester = student_match.iloc[0]['SEMESTER'] if not student_match.empty else "N/A"
-        st.info(f"Currently marking for: {semester} Semester")
-        
-        with st.expander("Show Student List"):
-            attendance_results = []
-            for i, r in student_match.iterrows():
-                col_n, col_a = st.columns([3, 2])
-                status = col_a.radio(f"{r['STUDENT NAME']}", ["P", "A", "L", "S/L"], horizontal=True, key=f"att_{i}")
-                attendance_results.append({"name": r['STUDENT NAME'], "status": status})
+    # Shared Attendance Section
+    if user['Role'] in ['HOD', 'COORDINATOR', 'Faculty']:
+        with st.expander("📝 Mark Attendance & Lecture Record"):
+            st.write("Discipline, Batch aur Semester select kar ke attendance lagayein.")
+            # Yahan purani attendance logic fit ho jayegi
             
-            if st.button("SUBMIT TO DATABASE"):
-                st.success("✅ CONGRATULATIONS, YOUR ALL DATA HAS BEEN RECORDED")
-                st.balloons()
-
-    # --- DASHBOARD LOGIC ---
-    if role == 'HEAD OF ALLIED HEALTH SCIENCES':
-        st.title("🛡️ HOD EXECUTIVE DASHBOARD")
-        tab1, tab2 = st.tabs(["Institutional Analytics", "My Attendance Marking"])
-        with tab1: st.write("Revenue and Performance metrics here.")
-        with tab2: mark_attendance_section()
-
-    elif role == 'COORDINATOR OF ALLIED HEALTH SCIENCES':
-        st.title("📋 COORDINATOR PANEL")
-        tab1, tab2 = st.tabs(["Daily Monitoring", "My Attendance Marking"])
-        with tab1: st.write("Daily reports and schedules.")
-        with tab2: mark_attendance_section()
-
-    elif role == 'FACULTY MEMBER':
-        mark_attendance_section()
-
-    elif role == 'STUDENT':
-        st.title("🧑‍🎓 STUDENT TRANSPARENCY PORTAL")
-        st.write("View your attendance history and fines.")
-
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
