@@ -8,7 +8,7 @@ st.set_page_config(page_title="PIHS Portal", layout="wide")
 
 # Google Sheets Setup
 SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
-SHEET_ID = "YOUR_GOOGLE_SHEET_ID_HERE" # Apni Sheet ID yahan likhein
+SHEET_ID = "https://docs.google.com/spreadsheets/d/124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4/edit?gid=674862834#gid=674862834" # Apni Sheet ID yahan likhein
 
 # CSS for Beautiful UI (Colab Style)
 st.markdown("""
@@ -47,7 +47,7 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 def show_login():
-    st.title("🎓 WELCOME TO DEPARTMENT OF ALLIED HEALTH SCIENCES")
+    st.title("🎓 WELCOME TO THE DEPARTMENT OF ALLIED HEALTH SCIENCES")
     st.subheader("Authorized Access Only")
     
     with st.form("login_form"):
