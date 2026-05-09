@@ -45,10 +45,13 @@ def get_data(range_name):
         result = service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=range_name).execute()
         values = result.get('values', [])
         if not values: return pd.DataFrame()
+        
+        # Headers clean karne ka naya tareeqa
         df = pd.DataFrame(values[1:], columns=values[0])
-        df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.strip().str.title() # "role" becomes "Role"
         return df
-    except: return pd.DataFrame()
+    except Exception as e:
+        return pd.DataFrame()
 
 def submit_attendance(rows):
     try:
@@ -76,87 +79,56 @@ st.markdown("""
 # --- LOGIN LOGIC ---
 if not st.session_state.logged_in:
     users_df = get_data("USERS_CREDENTIALS!A:F")
+    
     cols = st.columns([1, 1.5, 1])
     with cols[1]:
         st.subheader("🔒 SYSTEM AUTHENTICATION")
-        role_selection = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'FACULTY MEMBER', 'STUDENT'])
+        role_selection = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'Faculty', 'Student'])
         
-        if role_selection in ['HOD', 'COORDINATOR']:
-            pass_input = st.text_input("SYSTEM PASSWORD", type="password")
-            if st.button("AUTHORIZE & ENTER"):
-                match = users_df[(users_df['Role'] == role_selection) & (users_df['Password'] == pass_input)]
-                if not match.empty:
-                    st.session_state.logged_in = True
-                    st.session_state.user_data = match.iloc[0].to_dict()
-                    st.rerun()
-                else: st.error("❌ Invalid Password!")
+        if not users_df.empty:
+            # Role mapping for matching
+            role_map = {'HOD': 'HOD', 'COORDINATOR': 'COORDINATOR', 'Faculty': 'Faculty', 'Student': 'Student'}
+            db_role = role_map.get(role_selection, role_selection)
 
-        elif role_selection == 'FACULTY MEMBER':
-            faculty_list = users_df[users_df['Role'] == 'Faculty']['Full Name'].tolist()
-            selected_faculty = st.selectbox("SELECT YOUR NAME:", faculty_list)
-            pass_input = st.text_input("PERSONAL PASSWORD", type="password")
-            if st.button("VERIFY & ENTER"):
-                match = users_df[(users_df['Full Name'] == selected_faculty) & (users_df['Password'] == pass_input)]
-                if not match.empty:
-                    st.session_state.logged_in = True
-                    st.session_state.user_data = match.iloc[0].to_dict()
-                    st.rerun()
-                else: st.error("❌ Incorrect Credentials")
+            if role_selection in ['HOD', 'COORDINATOR']:
+                pass_input = st.text_input("SYSTEM PASSWORD", type="password")
+                if st.button("AUTHORIZE & ENTER"):
+                    match = users_df[(users_df['Role'] == db_role) & (users_df['Password'] == pass_input)]
+                    if not match.empty:
+                        st.session_state.logged_in = True
+                        st.session_state.user_data = match.iloc[0].to_dict()
+                        st.rerun()
+                    else: st.error("❌ Invalid Password!")
 
-        elif role_selection == 'STUDENT':
-            if st.button("PROCEED TO STUDENT PORTAL"):
-                st.session_state.logged_in = True
-                st.session_state.user_data = {'Role': 'Student', 'Full Name': 'Student Access'}
-                st.rerun()
+            elif role_selection == 'Faculty':
+                faculty_list = users_df[users_df['Role'] == 'Faculty']['Full Name'].tolist()
+                selected_faculty = st.selectbox("SELECT YOUR NAME:", faculty_list)
+                pass_input = st.text_input("PERSONAL PASSWORD", type="password")
+                if st.button("VERIFY & ENTER"):
+                    match = users_df[(users_df['Full Name'] == selected_faculty) & (users_df['Password'] == pass_input)]
+                    if not match.empty:
+                        st.session_state.logged_in = True
+                        st.session_state.user_data = match.iloc[0].to_dict()
+                        st.rerun()
+                    else: st.error("❌ Incorrect Credentials")
+
+            elif role_selection == 'Student':
+                if st.button("PROCEED TO STUDENT PORTAL"):
+                    st.session_state.logged_in = True
+                    st.session_state.user_data = {'Role': 'Student', 'Full Name': 'Student Access'}
+                    st.rerun()
+        else:
+            st.error("⚠️ Database connecting... Please wait or check Sheet permissions.")
 else:
-    # --- DASHBOARD LOADED ---
+    # --- DASHBOARD ---
     user = st.session_state.user_data
-    role = user['Role']
-    st.sidebar.markdown(f"### 📍 Welcome\n**{user['Full Name']}**")
-    st.sidebar.info(f"Department: {user.get('Department', 'N/A')}")
+    role = user.get('Role', 'Student')
+    st.sidebar.markdown(f"### 📍 Welcome\n**{user.get('Full Name', 'User')}**")
+    
+    st.title(f"🛡️ {role} Dashboard")
     
     if role in ['HOD', 'COORDINATOR', 'Faculty']:
-        st.title(f"🛡️ {role} Dashboard")
-        tabs = st.tabs(["Mark Attendance", "Institutional Analytics", "Staff Monitoring"])
-        
-        with tabs[0]: # Mark Attendance Section
-            st.markdown("### 📋 Faculty Regulatory Portal")
-            df_students = get_data("STUDENTS LIST!A:Z")
-            
-            c1, c2 = st.columns(2)
-            disc = c1.selectbox("Discipline", df_students['DISCIPLINE'].unique() if not df_students.empty else [])
-            batch = c2.selectbox("Batch", df_students['BATCH'].unique() if not df_students.empty else [])
-            
-            # Auto-Semester Logic
-            match = df_students[(df_students['BATCH'] == batch) & (df_students['DISCIPLINE'] == disc)]
-            semester = match.iloc[0]['SEMESTER'] if not match.empty else "N/A"
-            st.info(f"Marking for: {semester} Semester")
-            
-            subj = st.text_input("Subject Name (e.g. Anatomy)")
-            topic = st.text_area("Lecture Summary")
-            
-            if not match.empty:
-                st.markdown("#### Particular Student List")
-                att_list = []
-                for i, r in match.iterrows():
-                    col1, col2 = st.columns([3, 2])
-                    stat = col2.radio(f"{r['STUDENT NAME']}", ["P", "A", "L", "S/L"], horizontal=True, key=f"s_{i}")
-                    # Corrected Line Below:
-                    att_list.append([r['STUDENT NAME'], r.get('Father Name', 'N/A'), stat])
-                
-                if st.button("SUBMIT TO DATABASE"):
-                    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    # Full backend logic updated
-                    final_rows = [[ts.split()[0], ts.split()[1], "Slot", user['Full Name'], user.get('Department','N/A'), disc, subj, topic, name, father, stat, (100 if stat=='A' else 0), batch, semester] for name, father, stat in att_list]
-                    if submit_attendance(final_rows):
-                        st.balloons()
-                        st.success("✅ CONGRATULATIONS, YOUR ALL DATA HAS BEEN RECORDED")
-                    else: st.error("Database connection failed!")
-
-        with tabs[1]: # Analytics for HOD/Coordinator
-            st.write("Total Revenue from Fines: Rs. 608,800")
-            st.info("Institutional Performance graphs are being synced...")
-
-    if st.sidebar.button("🚪 Secure Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
+        tabs = st.tabs(["Mark Attendance", "Analytics"])
+        with tabs[0]:
+            st.markdown("### 📋 Mark Class Attendance")
+            #
