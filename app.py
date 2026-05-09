@@ -3,38 +3,37 @@ import pandas as pd
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from datetime import datetime
+import calendar
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="PIHS Mardan Portal", layout="wide")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="PIHS Mardan Command Center", layout="wide")
 
-# Google Sheets Setup
 SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
 SHEET_ID = "124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4"
 
-# --- ELITE UI STYLING ---
+# --- 2. ELITE UI STYLING ---
 st.markdown("""
     <style>
     .main { background-color: #0d1b2a; color: white; }
     @keyframes blinker { 50% { opacity: 0; } }
     .blinking-text {
-        font-family: 'Arial Black', sans-serif; font-size: 32px;
-        color: #FFD700; animation: blinker 1.5s linear infinite;
-        text-align: center; text-shadow: 0 0 20px #FFA500;
+        font-family: 'Arial Black'; font-size: 32px; color: #FFD700;
+        animation: blinker 1.5s linear infinite; text-align: center; margin-bottom: 5px;
     }
     .gateway-master { 
-        background-color: #001d3d; padding: 30px; border-radius: 20px; 
-        border: 2px solid #FFD700; box-shadow: 0px 10px 40px rgba(0,0,0,0.9);
-        text-align: center; margin-bottom: 25px;
+        background-color: #001d3d; padding: 20px; border-radius: 20px; 
+        border: 2px solid #FFD700; text-align: center; margin-bottom: 20px;
     }
-    .stButton>button { 
-        width: 100%; background-image: linear-gradient(to right, #28a745, #218838); 
-        color: white; font-weight: bold; border-radius: 10px; height: 3.5em; border: none;
+    .calendar-box {
+        background-color: #1b263b; padding: 15px; border-radius: 12px;
+        border-left: 5px solid #1a73e8; margin-bottom: 20px; text-align: center;
     }
-    .stTextInput>div>div>input, .stSelectbox>div>div>div { background-color: #1b263b !important; color: white !important; }
+    .stButton>button { width: 100%; border-radius: 12px; height: 3.5em; font-weight: bold; background-color: #28a745; color: white; border: none; }
+    .critical-alert { color: #ff4b4b; font-weight: bold; animation: blinker 1s linear infinite; padding: 10px; border: 1px solid red; border-radius: 8px; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- BACKEND FUNCTIONS ---
+# --- 3. BACKEND ENGINES ---
 def get_service():
     creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO)
     return build('sheets', 'v4', credentials=creds)
@@ -42,127 +41,121 @@ def get_service():
 def get_data(range_name):
     try:
         service = get_service()
-        # Using single quotes for sheet names with spaces
-        result = service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=f"'{range_name}'!A:Z").execute()
+        result = service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=range_name).execute()
         values = result.get('values', [])
         if not values: return pd.DataFrame()
         df = pd.DataFrame(values[1:], columns=values[0])
-        df.columns = df.columns.str.strip().str.upper()
-        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        df.columns = df.columns.str.strip()
         return df
-    except Exception as e:
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 def submit_attendance(rows):
-    service = get_service()
-    body = {'values': rows}
-    service.spreadsheets().values().append(
-        spreadsheetId=SHEET_ID, range="'ATTENDANCE HISTORY'!A:R",
-        valueInputOption="RAW", body=body).execute()
+    try:
+        service = get_service()
+        service.spreadsheets().values().append(
+            spreadsheetId=SHEET_ID, range="ATTENDANCE HISTORY!A:R",
+            valueInputOption="RAW", body={'values': rows}).execute()
+        return True
+    except: return False
 
-# --- HEADER & CELEBRATION ---
-if 'logged_in' not in st.session_state:
-    st.balloons()
+# --- 4. GLOBAL HEADER & REAL-TIME CALENDAR ---
+now = datetime.now()
+st.markdown(f'<div class="gateway-master"><div class="blinking-text">WELCOME TO THE</div><h1 style="color:white; font-size:26px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1><p style="color:#FFD700;">PIHS MARDAN COMMAND CENTER</p></div>', unsafe_allow_html=True)
 
-st.markdown("""
-<div class="gateway-master">
-    <div class="blinking-text">WELCOME TO THE</div>
-    <h1 style="color:white; font-size:26px; letter-spacing: 2px; margin-top:0px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
-    <p style="color:#FFD700; font-size:18px;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p>
-</div>
-""", unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown(f"""
+    <div class="calendar-box">
+        <h4 style="color:#FFD700; margin:0;">📅 REAL-TIME CALENDAR</h4>
+        <h2 style="margin:0; color:white;">{now.strftime("%d %B")}</h2>
+        <p style="margin:0; color:#1a73e8;">{now.strftime("%Y | %A")}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# --- AUTH LOGIC ---
+# --- 5. AUTHENTICATION ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    users_df = get_data("USERS CREDENTIALS")
-    cols = st.columns([1, 1.5, 1])
+    users_df = get_data("USERS_CREDENTIALS!A:F")
+    cols = st.columns([1, 1.2, 1])
     with cols[1]:
-        st.subheader("🔒 SECURE LOGIN")
-        role_selection = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'FACULTY MEMBER'])
-        
-        if role_selection in ['HOD', 'COORDINATOR']:
-            u_name = st.text_input("Username (e.g. farooq.hod)")
-            p_name = st.text_input("Password", type="password")
-            if st.button("AUTHORIZE"):
-                if not users_df.empty:
-                    match = users_df[(users_df['USERNAME'] == u_name.strip()) & (users_df['PASSWORD'] == p_name.strip())]
-                    if not match.empty:
-                        st.session_state.logged_in = True
-                        st.session_state.user = match.iloc[0].to_dict()
-                        st.rerun()
-                    else: st.error("❌ Incorrect Credentials")
-
-        elif role_selection == 'FACULTY MEMBER':
-            if not users_df.empty:
-                faculty_names = users_df[users_df['ROLE'].str.upper() == 'FACULTY']['FULL NAME'].tolist()
-                name_in = st.selectbox("SELECT YOUR NAME:", faculty_names)
-                pass_in = st.text_input("PASSWORD", type="password")
-                if st.button("VERIFY FACULTY"):
-                    match = users_df[(users_df['FULL NAME'] == name_in) & (users_df['PASSWORD'] == pass_in.strip())]
-                    if not match.empty:
-                        st.session_state.logged_in = True
-                        st.session_state.user = match.iloc[0].to_dict()
-                        st.rerun()
-                    else: st.error("❌ Incorrect Password")
-
-else:
-    user = st.session_state.user
-    role, dept = user['ROLE'], user['DEPARTMENT']
-    
-    st.sidebar.success(f"Verified: {user['FULL NAME']}")
-    st.sidebar.info(f"Department: {dept}")
-    
-    st.title(f"🛡️ {role} Portal - {dept}")
-    
-    # --- ATTENDANCE SYSTEM ---
-    with st.expander("📝 MARK ATTENDANCE & LECTURE RECORD", expanded=True):
-        df_students = get_data("STUDENTS LIST")
-        
-        if not df_students.empty:
-            c1, c2 = st.columns(2)
-            disc = c1.selectbox("1. Discipline", df_students['DISCIPLINE'].unique())
-            batch = c2.selectbox("2. Batch", df_students['BATCH'].unique())
-
-            # AUTO-SEMESTER & FILTERING
-            match_st = df_students[(df_students['BATCH'] == batch) & (df_students['DISCIPLINE'] == disc)]
-            semester = match_st.iloc[0]['SEMESTER'] if not match_st.empty else "N/A"
+        role = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'Faculty', 'Student'])
+        if role != '-- SELECT ROLE --':
+            if role == 'Faculty':
+                f_names = users_df[users_df['Role'] == 'Faculty']['Full Name'].tolist()
+                user_sel = st.selectbox("Select Your Name:", f_names)
+            else: user_sel = role
             
-            now = datetime.now()
-            st.warning(f"📅 {now.strftime('%Y-%m-%d')} | {now.strftime('%A')} | Semester: {semester}")
+            pwd = st.text_input("PASSWORD", type="password")
+            if st.button("ENTER PORTAL"):
+                match = users_df[(users_df['Full Name'] == user_sel) & (users_df['Password'] == pwd)] if role == 'Faculty' else users_df[(users_df['Role'] == role) & (users_df['Password'] == pwd)]
+                if not match.empty:
+                    st.session_state.logged_in, st.session_state.user = True, match.iloc[0].to_dict()
+                    st.rerun()
+                else: st.error("Invalid Credentials")
+else:
+    u = st.session_state.user
+    role = u['Role']
 
-            subject = st.text_input("📖 Subject / Course Name")
-            topic = st.text_area("🗒️ Lecture Topic / Record")
+    # --- 6. HOD & COORDINATOR DASHBOARD ---
+    if role in ['HOD', 'COORDINATOR']:
+        tabs = st.tabs(["📊 Analytics", "📝 Take Attendance", "⚙️ Admin Control"])
+        
+        with tabs[0]: # Analytics
+            st.subheader("⚡ Real-Time Monitoring")
+            df_att = get_data("ATTENDANCE HISTORY!A:R")
+            if not df_att.empty:
+                # 75% Warning
+                summary = df_att.groupby('STUDENT NAME').agg({'Status': lambda x: (list(x).count('P')/len(x))*100}).reset_index()
+                critical = summary[summary['Status'] < 75]
+                for _, r in critical.iterrows():
+                    st.markdown(f'<div class="critical-alert">⚠️ WARNING: {r["STUDENT NAME"]} ({r["Status"]:.1f}%)</div>', unsafe_allow_html=True)
+            
+            st.info(f"Viewing logs for {now.strftime('%Y-%m-%d')}")
+            st.dataframe(df_att.tail(10))
 
-            if not match_st.empty:
-                attendance_results = []
-                st.markdown("---")
-                for i, row in match_st.iterrows():
-                    cn, cs = st.columns([3, 2])
-                    status = cs.radio(f"{row['STUDENT NAME']} (S/O {row.get('FATHER NAME', 'N/A')})", ["P", "A", "L", "S/L"], horizontal=True, key=f"at_{i}")
-                    attendance_results.append({"name": row['STUDENT NAME'], "father": row.get('FATHER NAME', 'N/A'), "status": status})
+        with tabs[1]: # MARK ATTENDANCE (Common for all Staff)
+            st.header("📋 Subject Teacher Regulatory Portal")
+            df_students = get_data("STUDENTS LIST!A:Z")
+            
+            c1, c2, c3 = st.columns(3)
+            disc = c1.selectbox("Discipline", df_students['DISCIPLINE'].unique() if not df_students.empty else [])
+            batch = c2.selectbox("Batch", df_students['BATCH'].unique() if not df_students.empty else [])
+            slot = c3.selectbox("Lecture Slot", ["1st Slot (08:00)", "2nd Slot (09:30)", "3rd Slot (11:00)", "4th Slot (12:30)"])
+            
+            match = df_students[(df_students['BATCH'] == batch) & (df_students['DISCIPLINE'] == disc)]
+            semester = match.iloc[0]['SEMESTER'] if not match.empty else "N/A"
+            st.warning(f"📍 Class: {disc} | {batch} | {semester} Semester")
 
-                if st.button("✅ SUBMIT RECORD"):
-                    if not subject or not topic:
-                        st.error("Please fill Subject and Topic fields!")
-                    else:
-                        final_rows = []
-                        for res in attendance_results:
-                            fine = 100 if res['status'] == 'A' else 0
-                            final_rows.append([
-                                now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"), now.strftime("%A"), 
-                                "Slot", user['FULL NAME'], dept, disc, subject.upper(), 
-                                "Start", "End", "Duration", topic, res['name'], res['father'], res['status'], 
-                                fine, batch, semester
-                            ])
-                        submit_attendance(final_rows)
+            subj = st.text_input("Subject Name")
+            topic = st.text_area("Lesson Plan / Topic Covered")
+
+            if not match.empty:
+                st.markdown("#### Student List (Mark Presence)")
+                att_records = []
+                for i, r in match.iterrows():
+                    col_name, col_fath, col_stat = st.columns([2, 2, 2])
+                    col_name.write(r['STUDENT NAME'])
+                    col_fath.write(r['Father Name'])
+                    stat = col_stat.radio("Status", ["P", "A", "L", "S/L"], horizontal=True, key=f"s_{i}")
+                    att_records.append([r['STUDENT NAME'], r['Father Name'], stat])
+                
+                if st.button("🚀 SUBMIT ATTENDANCE"):
+                    final_rows = [[now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"), slot, u['Full Name'], u.get('Department','HOD'), disc, subj, topic, n, f, s, (100 if s=='A' else 0), batch, semester] for n, f, s in att_records]
+                    if submit_attendance(final_rows):
                         st.balloons()
-                        st.success(f"✅ CONGRATULATIONS, ALL DATA RECORDED FOR {dept}")
-        else:
-            st.error("Error: Check 'STUDENTS LIST' tab in your Google Sheet!")
+                        st.success("✅ Data Recorded Successfully!")
 
-    if st.sidebar.button("🚪 Logout"):
+    # --- 7. STUDENT DASHBOARD ---
+    elif role == 'Student':
+        st.title("👨‍🎓 Student Attendance History")
+        st.write("View your detailed semester progress below.")
+        s_name = st.text_input("Enter your Full Name:")
+        if s_name:
+            logs = get_data("ATTENDANCE HISTORY!A:R")
+            my_res = logs[logs['STUDENT NAME'].str.contains(s_name, case=False, na=False)]
+            st.dataframe(my_res[['Date', 'Slot', 'Subject', 'Topic', 'Status']], use_container_width=True)
+
+    if st.sidebar.button("Secure Logout"):
         st.session_state.logged_in = False
         st.rerun()
