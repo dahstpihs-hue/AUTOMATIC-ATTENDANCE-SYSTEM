@@ -2,161 +2,138 @@ import streamlit as st
 import pandas as pd
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
-import plotly.express as px # Analytics ke liye
+from datetime import datetime
+import base64
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="PIHS Mardan Portal", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="PIHS Mardan Portal", layout="wide")
 
 # Google Sheets Setup
 SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
 SHEET_ID = "124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4"
 
-# --- GOOGLE COLAB VIBRANT THEME (CSS) ---
+# --- UI STYLING & GLOW EFFECT ---
 st.markdown("""
     <style>
-    /* Main Background */
-    .stApp { background-color: #ffffff; }
-    
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] { background-color: #202124; border-right: 1px solid #3c4043; }
-    section[data-testid="stSidebar"] .stMarkdown, section[data-testid="stSidebar"] label { color: #e8eaed !important; }
-    
-    /* Professional Buttons */
-    .stButton>button { 
-        width: 100%; border-radius: 4px; background-color: #1a73e8; color: white; 
-        font-weight: 500; height: 3em; border: none; transition: 0.3s;
-    }
-    .stButton>button:hover { background-color: #174ea6; box-shadow: 0 1px 3px rgba(60,64,67,0.3); }
-    
-    /* Headers */
-    h1 { color: #1a73e8; font-family: 'Google Sans',Arial,sans-serif; font-weight: 400; }
-    .auth-box { 
-        background-color: #ffffff; padding: 40px; border-radius: 8px; 
-        box-shadow: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15); 
-        margin-top: 50px; border: 1px solid #dadce0;
-    }
-    
-    /* Tabs & Cards */
-    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-    .stTabs [data-baseweb="tab"] { font-weight: 500; color: #5f6368; }
-    .stTabs [aria-selected="true"] { color: #1a73e8 !important; border-bottom-color: #1a73e8 !important; }
+    .gateway-master { background-color: #0d1b2a; padding: 25px; border-radius: 20px; color: white; text-align: center; border: 2px solid #1b263b; box-shadow: 0px 10px 30px rgba(0,0,0,0.8); }
+    .glow-welcome { color: #fff; animation: glow 1s infinite alternate; font-family: 'Arial Black', sans-serif; font-size: 32px; margin: 0; }
+    @keyframes glow { from { text-shadow: 0 0 10px #FFD700; } to { text-shadow: 0 0 30px #FFA500; } }
+    .stButton>button { background-color: #28a745; color: white; font-weight: bold; border-radius: 10px; height: 3em; }
+    .main { background-color: #0d1b2a; color: white; }
+    div[data-testid="stExpander"] { background-color: #1b263b; border: 1px solid #FFD700; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- DATABASE FUNCTIONS ---
-def authenticate_sheets():
+# --- BACKEND FUNCTIONS ---
+def get_service():
     creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO)
     return build('sheets', 'v4', credentials=creds)
 
 def get_data(range_name):
-    try:
-        service = authenticate_sheets()
-        result = service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=range_name).execute()
-        values = result.get('values', [])
-        if not values: return pd.DataFrame()
-        df = pd.DataFrame(values[1:], columns=values[0])
-        df.columns = df.columns.str.strip()
-        return df
-    except Exception as e:
-        st.error(f"Database Error: {e}")
-        return pd.DataFrame()
+    service = get_service()
+    result = service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=range_name).execute()
+    values = result.get('values', [])
+    if not values: return pd.DataFrame()
+    df = pd.DataFrame(values[1:], columns=values[0])
+    df.columns = df.columns.str.strip()
+    return df
 
-def update_cell(cell_range, value):
-    service = authenticate_sheets()
-    body = {'values': [[value]]}
-    service.spreadsheets().values().update(spreadsheetId=SHEET_ID, range=cell_range, valueInputOption="RAW", body=body).execute()
+def submit_to_sheet(rows):
+    service = get_service()
+    body = {'values': rows}
+    service.spreadsheets().values().append(
+        spreadsheetId=SHEET_ID, range="ATTENDANCE HISTORY!A:R",
+        valueInputOption="RAW", body=body).execute()
 
-# --- AUTHENTICATION LOGIC ---
-if 'auth' not in st.session_state:
-    st.session_state.auth = {"logged_in": False, "user": None}
+# --- HEADER SECTION ---
+st.markdown(f"""
+<div class="gateway-master">
+    <h2 class="glow-welcome">WELCOME TO THE</h2>
+    <h1 style="color:white; font-size:24px; text-transform:uppercase;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
+    <p style="color:#FFD700;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p>
+</div>
+""", unsafe_allow_html=True)
 
-def login_screen():
-    st.markdown("<h1 style='text-align: center;'>🎓 PIHS Allied Health Sciences</h1>", unsafe_allow_html=True)
+# --- AUTHENTICATION ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
     cols = st.columns([1, 1.5, 1])
     with cols[1]:
-        st.markdown("<div class='auth-box'>", unsafe_allow_html=True)
-        st.subheader("Login to your Portal")
-        user_in = st.text_input("Username")
-        pass_in = st.text_input("Password", type="password")
+        st.subheader("🔒 SYSTEM AUTHENTICATION")
+        role = st.selectbox("Login As:", ['-- SELECT ROLE --', 'HEAD OF ALLIED HEALTH SCIENCES', 'COORDINATOR OF ALLIED HEALTH SCIENCES', 'FACULTY MEMBER', 'STUDENT'])
+        password = st.text_input("Password", type="password") if role != 'STUDENT' else ""
         
-        if st.button("Sign In"):
-            users = get_data("USERS CREDENTIALS!A:F")
-            if not users.empty:
-                match = users[(users['Username'].str.strip() == user_in) & (users['Password'].str.strip() == pass_in)]
+        if st.button("ENTER PORTAL"):
+            users_df = get_data("USERS CREDENTIALS!A:F")
+            if role == 'STUDENT':
+                st.session_state.logged_in = True
+                st.session_state.role = 'STUDENT'
+                st.rerun()
+            else:
+                match = users_df[(users_df['Role'] == role) & (users_df['Password'] == password)]
                 if not match.empty:
-                    st.session_state.auth = {"logged_in": True, "user": match.iloc[0].to_dict()}
+                    st.session_state.logged_in = True
+                    st.session_state.user_data = match.iloc[0].to_dict()
                     st.rerun()
-                else:
-                    st.error("Invalid Username or Password")
-        st.markdown("</div>", unsafe_allow_html=True)
+                else: st.error("Access Denied!")
 
-# --- DASHBOARDS ---
-def hod_dashboard(user):
-    st.title("🛡️ Head of Allied Health Sciences")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Faculty", "24", "+2")
-    col2.metric("Student Strength", "450", "98% Attendance")
-    col3.metric("Revenue Status", "608,800", "Updated")
-    
-    st.markdown("### 📊 Institutional Overview")
-    st.info("System is monitoring all departments (Radiology, Dental, Anesthesia, etc.)")
-
-def coordinator_dashboard(user):
-    st.title("📋 Coordinator Control Center")
-    st.selectbox("Select Department to Monitor", ["Radiology", "MLT", "Dental", "Anesthesia"])
-    st.date_input("Check Attendance Date")
-    st.button("Generate Daily Report")
-
-def faculty_dashboard(user):
-    st.title(f"🎓 Faculty Member: {user['Full Name']}")
-    
-    # Dynamic Batch/Semester selection from Google Sheets
-    st.sidebar.markdown("---")
-    batch = st.sidebar.selectbox("Select Batch", ["Batch 3rd", "Batch 5th", "Freshers"])
-    semester = st.sidebar.selectbox("Select Semester", ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"])
-    
-    tab1, tab2 = st.tabs(["Mark Attendance", "Lesson Plans"])
-    with tab1:
-        st.write(f"Marking attendance for **{batch} - {semester} Semester**")
-        st.button("Save Attendance to Google Sheet")
-
-def student_dashboard(user):
-    st.title(f"🧑‍🎓 Student Portal: {user['Full Name']}")
-    st.write(f"**Department:** {user['Department']}")
-    st.progress(85, text="Your Attendance: 85%")
-    st.button("Download Date Sheet")
-
-# --- MAIN APP FLOW ---
-if not st.session_state.auth["logged_in"]:
-    login_screen()
 else:
-    user_data = st.session_state.auth["user"]
+    role = st.session_state.user_data['Role'] if 'user_data' in st.session_state else 'STUDENT'
     
-    # 1. Force Password Change (If First Login)
-    if user_data.get('Is_First_Login') == 'Yes':
-        st.warning("🔒 Security Update Required: Change your default password.")
-        new_p = st.text_input("New Password", type="password")
-        if st.button("Update"):
-            # Logic to update row
-            users = get_data("USERS CREDENTIALS!A:F")
-            row = users[users['Username'] == user_data['Username']].index[0] + 2
-            update_cell(f"USERS CREDENTIALS!E{row}", new_p)
-            update_cell(f"USERS CREDENTIALS!F{row}", "No")
-            st.success("Updated! Login again.")
-            st.session_state.auth["logged_in"] = False
-            st.rerun()
-    else:
-        # 2. Main Navigation
-        role = user_data['Role']
-        st.sidebar.image("https://www.gstatic.com/images/branding/product/2x/avatar_square_blue_120dp.png", width=80)
-        st.sidebar.write(f"**{user_data['Full Name']}**")
-        st.sidebar.caption(f"{role} | {user_data['Department']}")
+    # --- 1. FACULTY DASHBOARD ---
+    if role == 'FACULTY MEMBER':
+        st.markdown("<h2 style='color:#FFD700;'>🎓 FACULTY REGULATORY PORTAL</h2>", unsafe_allow_html=True)
+        df_students = get_data("STUDENTS LIST!A:Z")
         
-        if role == "HOD": hod_dashboard(user_data)
-        elif role == "Coordinator": coordinator_dashboard(user_data)
-        elif role == "Teacher": faculty_dashboard(user_data)
-        elif role == "Student": student_dashboard(user_data)
+        c1, c2 = st.columns(2)
+        inst_name = c1.text_input("Instructor Name", value=st.session_state.user_data['Full Name'])
+        dept = c2.selectbox("Inst. Dept", ['Radiology', 'MLT', 'Dental', 'Anaesthesia'])
         
-        if st.sidebar.button("Logout"):
-            st.session_state.auth["logged_in"] = False
-            st.rerun()
+        c3, c4 = st.columns(2)
+        disc = c3.selectbox("Discipline", df_students['DISCIPLINE'].unique())
+        batch = c4.selectbox("Batch", df_students['BATCH'].unique())
+        
+        # Auto-Semester Logic
+        student_match = df_students[(df_students['BATCH'] == batch) & (df_students['DISCIPLINE'] == disc)]
+        semester = student_match.iloc[0]['SEMESTER'] if not student_match.empty else "N/A"
+        st.text_input("Semester", value=semester, disabled=True)
+        
+        subj = st.text_input("Subject Name")
+        topic = st.text_area("Lecture Record")
+        
+        if st.button("LOAD STUDENT LIST"):
+            st.session_state.current_students = student_match
+            
+        if 'current_students' in st.session_state:
+            st.markdown("### 📋 PARTICULAR STUDENT LIST")
+            attendance_data = []
+            for i, row in st.session_state.current_students.iterrows():
+                col_s, col_a = st.columns([3, 2])
+                status = col_a.radio(f"{row['STUDENT NAME']}", ["P", "A", "L", "S/L"], horizontal=True, key=i)
+                attendance_data.append([row['STUDENT NAME'], row['Father Name'], status])
+            
+            if st.button("SUBMIT ATTENDANCE"):
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                final_rows = []
+                total_fines = 0
+                for name, f_name, stat in attendance_data:
+                    fine = 100 if stat == "A" else 0
+                    total_fines += fine
+                    final_rows.append([ts.split()[0], ts.split()[1], "Day", "Slot", inst_name.upper(), dept, disc, subj.upper(), "Start", "End", "Duration", topic, name, f_name, stat, fine, batch, semester])
+                
+                submit_to_sheet(final_rows)
+                st.balloons()
+                st.success(f"✅ CONGRATULATIONS! Data Recorded. Total Fine: Rs. {total_fines}")
+
+    # --- 2. HOD DASHBOARD ---
+    elif role == 'HEAD OF ALLIED HEALTH SCIENCES':
+        st.markdown("<h1 style='color:#FFD700;'>🛡️ HOD EXECUTIVE PANEL</h1>", unsafe_allow_html=True)
+        st.metric("Total Collected Fines", "Rs. 608,800")
+        # Mazeed Analytics yahan aayenge
+
+    # --- 3. STUDENT DASHBOARD ---
+    elif role == 'STUDENT':
+        st.markdown("<h2 style='color:#FFD700;'>🧑‍🎓 STUDENT TRANSPARENCY PORTAL</h2>", unsafe_allow_html=True)
+        # Student Search logic
