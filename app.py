@@ -24,6 +24,7 @@ st.markdown("""
         animation: blinker 1.5s linear infinite;
         text-align: center;
         text-shadow: 0 0 20px #FFA500;
+        margin-bottom: 10px;
     }
     
     .gateway-master { 
@@ -33,7 +34,7 @@ st.markdown("""
         border: 2px solid #FFD700; 
         box-shadow: 0px 10px 40px rgba(0,0,0,0.9);
         text-align: center;
-        margin-bottom: 20px;
+        margin-bottom: 30px;
     }
     
     .stButton>button { 
@@ -48,7 +49,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. BACKEND FUNCTIONS ---
+# --- 3. DATABASE FUNCTIONS ---
 def get_service():
     creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO)
     return build('sheets', 'v4', credentials=creds)
@@ -61,14 +62,25 @@ def get_data(range_name):
         if not values: return pd.DataFrame()
         df = pd.DataFrame(values[1:], columns=values[0])
         df.columns = df.columns.str.strip()
-        # Clean white spaces from all data
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
         return df
     except Exception as e:
         st.error(f"Database Error: {e}")
         return pd.DataFrame()
 
-# --- 4. HEADER & CELEBRATIONS ---
+def save_attendance(rows):
+    try:
+        service = get_service()
+        body = {'values': rows}
+        service.spreadsheets().values().append(
+            spreadsheetId=SHEET_ID, range="ATTENDANCE HISTORY!A:R",
+            valueInputOption="RAW", body=body).execute()
+        return True
+    except Exception as e:
+        st.error(f"Save Error: {e}")
+        return False
+
+# --- 4. HEADER ---
 if 'first_load' not in st.session_state:
     st.balloons()
     st.session_state.first_load = True
@@ -76,7 +88,7 @@ if 'first_load' not in st.session_state:
 st.markdown("""
 <div class="gateway-master">
     <div class="blinking-text">WELCOME TO THE</div>
-    <h1 style="color:white; font-size:26px; letter-spacing: 2px; margin-top:10px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
+    <h1 style="color:white; font-size:26px; letter-spacing: 2px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
     <p style="color:#FFD700; font-size:18px;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p>
 </div>
 """, unsafe_allow_html=True)
@@ -87,58 +99,94 @@ if 'logged_in' not in st.session_state:
 
 if not st.session_state.logged_in:
     users_df = get_data("'USERS CREDENTIALS'!A:F")
-    
     cols = st.columns([1, 1.5, 1])
     with cols[1]:
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.subheader("🔒 SECURE GATEWAY ACCESS")
+        st.subheader("🔒 SECURE ACCESS LOGIN")
         role_selection = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'FACULTY MEMBER', 'STUDENT'])
         
         if role_selection in ['HOD', 'COORDINATOR']:
-            pass_input = st.text_input("ENTER SYSTEM PASSWORD", type="password")
-            if st.button("AUTHORIZE & ENTER"):
-                if not users_df.empty:
-                    # Smart matching: Search if selection exists in Role string (e.g. 'HOD' in 'HOD, faculty')
-                    match = users_df[
-                        (users_df['Role'].str.contains(role_selection, case=False, na=False)) & 
-                        (users_df['Password'] == pass_input.strip())
-                    ]
-                    if not match.empty:
-                        st.session_state.logged_in = True
-                        st.session_state.user_data = match.iloc[0].to_dict()
-                        st.rerun()
-                    else: st.error("❌ Incorrect Password!")
+            pass_input = st.text_input("PASSWORD", type="password")
+            if st.button("AUTHORIZE"):
+                match = users_df[(users_df['Role'].str.contains(role_selection, case=False, na=False)) & (users_df['Password'] == pass_input.strip())]
+                if not match.empty:
+                    st.session_state.logged_in = True
+                    st.session_state.user_data = match.iloc[0].to_dict()
+                    st.rerun()
+                else: st.error("Invalid Password")
 
         elif role_selection == 'FACULTY MEMBER':
-            if not users_df.empty:
-                # Get names where role contains 'Faculty'
-                fac_list = users_df[users_df['Role'].str.contains('Faculty', case=False, na=False)]['Full Name'].tolist()
-                selected_faculty = st.selectbox("SELECT YOUR NAME:", fac_list)
-                f_pass_input = st.text_input("PASSWORD", type="password")
-                if st.button("VERIFY FACULTY"):
-                    match = users_df[(users_df['Full Name'] == selected_faculty) & (users_df['Password'] == f_pass_input.strip())]
-                    if not match.empty:
-                        st.session_state.logged_in = True
-                        st.session_state.user_data = match.iloc[0].to_dict()
-                        st.rerun()
-                    else: st.error("❌ Invalid Credentials")
+            fac_list = users_df[users_df['Role'].str.contains('Faculty', case=False, na=False)]['Full Name'].tolist()
+            selected_fac = st.selectbox("SELECT YOUR NAME:", fac_list)
+            f_pass = st.text_input("PASSWORD", type="password")
+            if st.button("VERIFY"):
+                match = users_df[(users_df['Full Name'] == selected_fac) & (users_df['Password'] == f_pass.strip())]
+                if not match.empty:
+                    st.session_state.logged_in = True
+                    st.session_state.user_data = match.iloc[0].to_dict()
+                    st.rerun()
+                else: st.error("Invalid Credentials")
 
-        elif role_selection == 'STUDENT':
-            if st.button("ENTER STUDENT PORTAL"):
-                st.session_state.logged_in = True
-                st.session_state.user_data = {'Role': 'Student', 'Full Name': 'Portal Guest'}
-                st.rerun()
-
-# --- 6. DASHBOARD AREA ---
+# --- 6. DASHBOARD & ATTENDANCE SYSTEM ---
 else:
     user = st.session_state.user_data
-    st.sidebar.success(f"Session Active: {user['Full Name']}")
+    st.sidebar.success(f"Verified: {user['Full Name']}")
     st.title(f"🛡️ {user['Role']} Dashboard")
-    
-    # Combined Rights for HOD, Coordinator, and Faculty
+
+    # ATTENDANCE MARKING SYSTEM
     if any(role.strip().lower() in ['hod', 'coordinator', 'faculty'] for role in user['Role'].split(',')):
-        st.markdown("### 📝 Operations Management")
-        st.info("Aap yahan se attendance aur lecture records manage kar sakte hain.")
+        st.header("📝 Mark Student Attendance")
+        
+        # Load Student Data
+        students_df = get_data("'STUDENTS LIST'!A:Z")
+        
+        if not students_df.empty:
+            c1, c2 = st.columns(2)
+            sel_disc = c1.selectbox("Select Discipline", students_df['DISCIPLINE'].unique())
+            sel_batch = c2.selectbox("Select Batch", students_df['BATCH'].unique())
+            
+            # Filter Students
+            filtered_students = students_df[(students_df['DISCIPLINE'] == sel_disc) & (students_df['BATCH'] == sel_batch)]
+            semester = filtered_students.iloc[0]['SEMESTER'] if not filtered_students.empty else "N/A"
+            
+            st.info(f"Marking Attendance for: {sel_disc} | {sel_batch} | Semester: {semester}")
+            
+            subject = st.text_input("Subject Name (e.g., Anatomy, Physiology)").upper()
+            topic = st.text_area("Lecture Topic / Record")
+            
+            st.markdown("### Student Attendance List")
+            attendance_results = []
+            
+            for i, row in filtered_students.iterrows():
+                col_name, col_status = st.columns([3, 2])
+                status = col_status.radio(f"{row['STUDENT NAME']}", ["P", "A", "L", "S/L"], horizontal=True, key=f"std_{i}")
+                attendance_results.append({
+                    "name": row['STUDENT NAME'],
+                    "father": row.get('Father Name', 'N/A'),
+                    "status": status
+                })
+            
+            if st.button("SUBMIT ATTENDANCE TO DATABASE"):
+                if not subject or not topic:
+                    st.error("Please enter Subject and Topic before submitting!")
+                else:
+                    date_now = datetime.now().strftime("%Y-%m-%d")
+                    time_now = datetime.now().strftime("%H:%M:%S")
+                    final_rows = []
+                    
+                    for res in attendance_results:
+                        fine = 100 if res['status'] == "A" else 0
+                        final_rows.append([
+                            date_now, time_now, "Day", "Slot", user['Full Name'].upper(), 
+                            user['Department'], sel_disc, subject, "Start", "End", 
+                            "Duration", topic, res['name'], res['father'], res['status'], 
+                            fine, sel_batch, semester
+                        ])
+                    
+                    if save_attendance(final_rows):
+                        st.balloons()
+                        st.success("✅ CONGRATULATIONS! ALL DATA HAS BEEN RECORDED SUCCESSFULLY.")
+        else:
+            st.error("Student list not found in Google Sheets!")
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
