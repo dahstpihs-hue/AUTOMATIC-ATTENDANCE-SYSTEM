@@ -29,14 +29,14 @@ service = init_connection()
 @st.cache_data(ttl=60)
 def load_users():
     sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SHEET_ID, range="USERS_CREDENTIALS!A:Z").execute()
+    result = sheet.values().get(spreadsheetId=SHEET_ID, range="USERS CREDENTIALS!A:Z").execute()
     values = result.get('values', [])
     return pd.DataFrame(values[1:], columns=values[0])
 
 @st.cache_data(ttl=60)
 def load_students():
     sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SHEET_ID, range="MASTER STUDENTS LIST!A:Z").execute()
+    result = sheet.values().get(spreadsheetId=SHEET_ID, range="TUDENTS LIST!A:Z").execute()
     values = result.get('values', [])
     return pd.DataFrame(values[1:], columns=values[0])
 
@@ -79,7 +79,7 @@ def show_hod_dashboard():
     user = st.session_state.user
     st.markdown(f"<h2 style='color:#FFD700;'>🛡️ HOD DASHBOARD — {user['Full Name']}</h2>", unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["📊 Attendance Overview", "👥 Faculty Management", "📋 All Records"])
+    tab1, tab2, tab3 = st.tabs(["📊 Attendance Overview", "👥 Faculty Management", "📋 Lecture Records"])
     
     with tab1:
         st.subheader("📊 Attendance Overview")
@@ -89,10 +89,12 @@ def show_hod_dashboard():
             values = result.get('values', [])
             if len(values) > 1:
                 df_log = pd.DataFrame(values[1:], columns=values[0])
-                st.dataframe(df_log, use_container_width=True)
-                st.metric("Total Lectures", len(df_log))
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Lectures", len(df_log))
                 absents = len(df_log[df_log['Status'] == 'A']) if 'Status' in df_log.columns else 0
-                st.metric("Total Absents", absents)
+                col2.metric("Total Absents", absents)
+                col3.metric("Total Fines", f"Rs. {absents * 100}")
+                st.dataframe(df_log, use_container_width=True)
             else:
                 st.info("Abhi koi attendance record nahi hai.")
         except Exception as e:
@@ -105,10 +107,10 @@ def show_hod_dashboard():
         st.dataframe(faculty[['Full Name', 'Department', 'Username']], use_container_width=True)
 
     with tab3:
-        st.subheader("📋 All Lecture Records")
+        st.subheader("📋 Lecture Records")
         try:
             sheet = service.spreadsheets()
-            result = sheet.values().get(spreadsheetId=SHEET_ID, range="LECTURE RECORD!A:Z").execute()
+            result = sheet.values().get(spreadsheetId=SHEET_ID, range="LECTURE RECORDS!A:Z").execute()
             values = result.get('values', [])
             if len(values) > 1:
                 df_lec = pd.DataFrame(values[1:], columns=values[0])
@@ -133,9 +135,10 @@ def show_coordinator_dashboard():
             values = result.get('values', [])
             if len(values) > 1:
                 df_log = pd.DataFrame(values[1:], columns=values[0])
-                dept_filter = st.selectbox("Department Filter", ["All"] + list(df_log['Discipline'].unique()) if 'Discipline' in df_log.columns else ["All"])
-                if dept_filter != "All":
-                    df_log = df_log[df_log['Discipline'] == dept_filter]
+                if 'Discipline' in df_log.columns:
+                    dept_filter = st.selectbox("Department Filter", ["All"] + list(df_log['Discipline'].unique()))
+                    if dept_filter != "All":
+                        df_log = df_log[df_log['Discipline'] == dept_filter]
                 st.dataframe(df_log, use_container_width=True)
             else:
                 st.info("Koi record nahi.")
@@ -146,7 +149,7 @@ def show_coordinator_dashboard():
         st.subheader("📋 Lecture Records")
         try:
             sheet = service.spreadsheets()
-            result = sheet.values().get(spreadsheetId=SHEET_ID, range="LECTURE RECORD!A:Z").execute()
+            result = sheet.values().get(spreadsheetId=SHEET_ID, range="LECTURE RECORDS!A:Z").execute()
             values = result.get('values', [])
             if len(values) > 1:
                 df_lec = pd.DataFrame(values[1:], columns=values[0])
@@ -175,16 +178,14 @@ def show_faculty_dashboard():
             subject = st.text_input("Subject")
             topic = st.text_area("Lecture Topic")
 
-        col3, col4, col5 = st.columns(3)
+        col3, col4 = st.columns(2)
         with col3:
             slot = st.selectbox("Slot", ['1','2','3','4'])
-            day = st.selectbox("Day", ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], index=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].index(datetime.now().strftime('%A')) if datetime.now().strftime('%A') in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'] else 0)
+            day = st.selectbox("Day", ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'])
         with col4:
             times = ['08:00 AM','08:30 AM','09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM','12:00 PM','12:30 PM','01:00 PM','01:30 PM','02:00 PM','02:30 PM']
             start_time = st.selectbox("Start Time", times)
-            end_time = st.selectbox("End Time", times)
-        with col5:
-            st.write("")
+            end_time = st.selectbox("End Time", times[1:])
 
         if discipline and batch:
             filtered = df_students[(df_students['DISCIPLINE'] == discipline) & (df_students['BATCH'] == batch)]
@@ -194,29 +195,27 @@ def show_faculty_dashboard():
                 for i, row in filtered.iterrows():
                     col_a, col_b = st.columns([3,2])
                     with col_a:
-                        st.write(f"**{row['STUDENT NAME']}**")
+                        father = row.get('Father Name', '')
+                        st.write(f"**{row['STUDENT NAME']}** (S/O {father})")
                     with col_b:
                         status = st.radio("", ['P','A','L','S/L'], key=f"att_{i}", horizontal=True)
                         attendance[row['STUDENT NAME']] = status
 
                 if st.button("✅ SUBMIT ATTENDANCE", use_container_width=True):
                     now = datetime.now()
-                    rows = []
                     for name, status in attendance.items():
                         fine = 100 if status == 'A' else 0
-                        father = filtered[filtered['STUDENT NAME'] == name]['Father Name'].values[0] if 'Father Name' in filtered.columns else ''
-                        semester = filtered[filtered['STUDENT NAME'] == name]['SEMESTER'].values[0] if 'SEMESTER' in filtered.columns else ''
-                        rows.append([
+                        student_row = filtered[filtered['STUDENT NAME'] == name].iloc[0]
+                        father = student_row.get('Father Name', '')
+                        semester = student_row.get('SEMESTER', '')
+                        append_row("ATTENDANCE HISTORY!A:A", [
                             now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"),
-                            day, slot, user['Full Name'], user['Department'],
+                            day, slot, user['Full Name'], user.get('Department',''),
                             discipline, subject.upper(), start_time, end_time,
                             topic, name, father, status, fine, batch, semester
                         ])
-                    for row in rows:
-                        append_row("ATTENDANCE HISTORY!A:Z", row)
-                    st.success("✅ CONGRATULATIONS! Attendance submitted successfully!")
+                    st.success("✅ Attendance submitted successfully!")
                     st.balloons()
-                    load_students.clear()
 
     with tab2:
         st.subheader("📋 My Lecture Records")
@@ -226,8 +225,11 @@ def show_faculty_dashboard():
             values = result.get('values', [])
             if len(values) > 1:
                 df_log = pd.DataFrame(values[1:], columns=values[0])
-                my_records = df_log[df_log['Instructor Name'] == user['Full Name']] if 'Instructor Name' in df_log.columns else df_log
-                st.dataframe(my_records, use_container_width=True)
+                if 'Instructor Name' in df_log.columns:
+                    my_records = df_log[df_log['Instructor Name'] == user['Full Name']]
+                    st.dataframe(my_records, use_container_width=True)
+                else:
+                    st.dataframe(df_log, use_container_width=True)
             else:
                 st.info("Koi record nahi.")
         except Exception as e:
@@ -244,18 +246,15 @@ def show_student_dashboard():
         values = result.get('values', [])
         if len(values) > 1:
             df_log = pd.DataFrame(values[1:], columns=values[0])
-            my_records = df_log[df_log['Student Name'].astype(str).str.strip() == user['Full Name'].strip()] if 'Student Name' in df_log.columns else pd.DataFrame()
-            
-            col1, col2, col3 = st.columns(3)
-            total = len(my_records)
-            absents = len(my_records[my_records['Status'] == 'A']) if not my_records.empty and 'Status' in my_records.columns else 0
-            fines = absents * 100
-            
-            col1.metric("Total Classes", total)
-            col2.metric("Total Absents", absents)
-            col3.metric("Total Fine", f"Rs. {fines}")
-            
-            st.dataframe(my_records, use_container_width=True)
+            if 'Student Name' in df_log.columns:
+                my_records = df_log[df_log['Student Name'].astype(str).str.strip() == user['Full Name'].strip()]
+                col1, col2, col3 = st.columns(3)
+                total = len(my_records)
+                absents = len(my_records[my_records['Status'] == 'A']) if 'Status' in my_records.columns else 0
+                col1.metric("Total Classes", total)
+                col2.metric("Total Absents", absents)
+                col3.metric("Total Fine", f"Rs. {absents * 100}")
+                st.dataframe(my_records, use_container_width=True)
         else:
             st.info("Koi record nahi.")
     except Exception as e:
