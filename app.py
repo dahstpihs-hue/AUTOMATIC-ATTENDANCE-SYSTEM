@@ -4,14 +4,14 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from datetime import datetime
 
-# --- 1. PAGE CONFIGURATION ---
+# --- CONFIGURATION ---
 st.set_page_config(page_title="PIHS Mardan Portal", layout="wide")
 
 # Google Sheets Setup
 SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
 SHEET_ID = "124hfxw0Y1QQSe1VpPA2LZrhG8cqJpcktlYFGSNVEYc4"
 
-# --- 2. ELITE UI STYLING & BLINKING EFFECT ---
+# --- ELITE UI STYLING & BLINKING EFFECT ---
 st.markdown("""
     <style>
     .main { background-color: #0d1b2a; color: white; }
@@ -24,44 +24,39 @@ st.markdown("""
     .gateway-master { 
         background-color: #001d3d; padding: 30px; border-radius: 20px; 
         border: 2px solid #FFD700; box-shadow: 0px 10px 40px rgba(0,0,0,0.9);
-        text-align: center; margin-bottom: 30px;
+        text-align: center; margin-bottom: 25px;
     }
     .stButton>button { 
         width: 100%; background-image: linear-gradient(to right, #28a745, #218838); 
-        color: white; font-weight: bold; border-radius: 10px; height: 3.5em;
+        color: white; font-weight: bold; border-radius: 10px; height: 3.5em; border: none;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. DATABASE FUNCTIONS ---
+# --- BACKEND FUNCTIONS ---
 def get_service():
     creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO)
     return build('sheets', 'v4', credentials=creds)
 
-def get_data(tab_name):
+def get_data(range_name):
     try:
         service = get_service()
-        range_name = f"'{tab_name}'!A:Z"
         result = service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=range_name).execute()
         values = result.get('values', [])
         if not values: return pd.DataFrame()
         df = pd.DataFrame(values[1:], columns=values[0])
         df.columns = df.columns.str.strip()
-        return df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        return df
     except Exception: return pd.DataFrame()
 
-def save_attendance(rows):
-    try:
-        service = get_service()
-        body = {'values': rows}
-        # Saving to ATTENDANCE HISTORY
-        service.spreadsheets().values().append(
-            spreadsheetId=SHEET_ID, range="'ATTENDANCE HISTORY'!A:R",
-            valueInputOption="RAW", body=body).execute()
-        return True
-    except: return False
+def submit_attendance(rows):
+    service = get_service()
+    body = {'values': rows}
+    service.spreadsheets().values().append(
+        spreadsheetId=SHEET_ID, range="'ATTENDANCE HISTORY'!A:R",
+        valueInputOption="RAW", body=body).execute()
 
-# --- 4. HEADER ---
+# --- HEADER & BALLOONS ---
 if 'first_load' not in st.session_state:
     st.balloons()
     st.session_state.first_load = True
@@ -69,81 +64,97 @@ if 'first_load' not in st.session_state:
 st.markdown("""
 <div class="gateway-master">
     <div class="blinking-text">WELCOME TO THE</div>
-    <h1 style="color:white; font-size:26px; letter-spacing: 2px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
+    <h1 style="color:white; font-size:26px; letter-spacing: 2px; margin-top:0px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
     <p style="color:#FFD700; font-size:18px;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- 5. AUTHENTICATION ---
+# --- LOGIN LOGIC ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    users_df = get_data("USERS CREDENTIALS")
+    users_df = get_data("'USERS CREDENTIALS'!A:F")
     cols = st.columns([1, 1.5, 1])
     with cols[1]:
-        role_sel = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'FACULTY MEMBER', 'STUDENT'])
-        if role_sel in ['HOD', 'COORDINATOR']:
-            pwd = st.text_input("PASSWORD", type="password")
-            if st.button("LOGIN"):
-                match = users_df[(users_df['Role'].str.contains(role_sel, case=False, na=False)) & (users_df['Password'] == pwd.strip())]
+        role_selection = st.selectbox("LOGIN AS:", ['-- SELECT ROLE --', 'HOD', 'COORDINATOR', 'FACULTY MEMBER'])
+        
+        if role_selection in ['HOD', 'COORDINATOR']:
+            pass_input = st.text_input("PASSWORD", type="password")
+            if st.button("AUTHORIZE"):
+                match = users_df[(users_df['Role'].str.strip() == role_selection) & (users_df['Password'].str.strip() == pass_input)]
                 if not match.empty:
-                    st.session_state.logged_in, st.session_state.user_data = True, match.iloc[0].to_dict()
+                    st.session_state.logged_in = True
+                    st.session_state.user = match.iloc[0].to_dict()
                     st.rerun()
-                else: st.error("Access Denied")
-        elif role_sel == 'FACULTY MEMBER':
-            names = users_df[users_df['Role'].str.contains('Faculty', case=False, na=False)]['Full Name'].tolist()
-            name_sel = st.selectbox("NAME:", names)
-            pwd = st.text_input("PASSWORD", type="password")
-            if st.button("VERIFY"):
-                match = users_df[(users_df['Full Name'] == name_sel) & (users_df['Password'] == pwd.strip())]
-                if not match.empty:
-                    st.session_state.logged_in, st.session_state.user_data = True, match.iloc[0].to_dict()
-                    st.rerun()
+                else: st.error("❌ Incorrect Password")
 
-# --- 6. DASHBOARD ---
+        elif role_selection == 'FACULTY MEMBER':
+            names = users_df[users_df['Role'].str.strip() == 'Faculty']['Full Name'].tolist()
+            name_in = st.selectbox("SELECT YOUR NAME:", names)
+            pass_in = st.text_input("PASSWORD", type="password")
+            if st.button("VERIFY FACULTY"):
+                match = users_df[(users_df['Full Name'].str.strip() == name_in) & (users_df['Password'].str.strip() == pass_in)]
+                if not match.empty:
+                    st.session_state.logged_in = True
+                    st.session_state.user = match.iloc[0].to_dict()
+                    st.rerun()
+                else: st.error("❌ Incorrect Credentials")
+
 else:
-    user = st.session_state.user_data
-    st.sidebar.success(f"User: {user['Full Name']}")
+    # --- TEACHER DASHBOARD ---
+    user = st.session_state.user
+    teacher_dept = user.get('Department', 'GENERAL') # Automatically tracing department
     
-    if any(r.strip().lower() in ['hod', 'coordinator', 'faculty'] for r in user['Role'].split(',')):
-        st.header(f"🛡️ {user['Role']} Operations Panel")
-        
-        # Load Students from MASTER STUDENTS LIST
-        std_df = get_data("MASTER STUDENTS LIST")
-        
-        if not std_df.empty:
-            c1, c2 = st.columns(2)
-            disc = c1.selectbox("Discipline", std_df['DISCIPLINE'].unique())
-            batch = c2.selectbox("Batch", std_df['BATCH'].unique())
-            
-            filtered = std_df[(std_df['DISCIPLINE'] == disc) & (std_df['BATCH'] == batch)]
-            sem = filtered.iloc[0]['SEMESTER'] if not filtered.empty else "N/A"
-            st.info(f"Marking: {disc} | Batch: {batch} | Semester: {sem}")
-            
-            subj = st.text_input("Subject").upper()
-            topic = st.text_area("Lecture Record")
-            
-            attendance_list = []
-            st.markdown("---")
-            for i, row in filtered.iterrows():
-                col1, col2 = st.columns([3, 2])
-                col1.write(f"**{row['STUDENT NAME']}** (S/O {row.get('Father Name', 'N/A')})")
-                stat = col2.radio("Status", ["P", "A", "L", "S/L"], horizontal=True, key=f"s_{i}", label_visibility="collapsed")
-                attendance_list.append({"name": row['STUDENT NAME'], "father": row.get('Father Name', 'N/A'), "status": stat})
-            
-            if st.button("SUBMIT DAILY ATTENDANCE"):
-                if subj and topic:
-                    dt, tm = datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%H:%M:%S")
-                    # Calculate Fine: Absent = 100, others 0
-                    rows = [[dt, tm, datetime.now().strftime('%A'), "Slot", user['Full Name'].upper(), user['Department'], disc, subj, "Start", "End", "Duration", topic, r['name'], r['father'], r['status'], (100 if r['status'] == "A" else 0), batch, sem] for r in attendance_list]
-                    
-                    if save_attendance(rows):
-                        st.balloons()
-                        st.success(f"✅ RECORDED! Date: {dt} | Instructor: {user['Full Name']}")
-                else: st.warning("Subject and Topic are mandatory!")
-        else:
-            st.error("Cannot read 'MASTER STUDENTS LIST'. Check tab name in Google Sheets.")
+    st.sidebar.success(f"Teacher: {user['Full Name']}")
+    st.sidebar.info(f"Department: {teacher_dept}")
+    
+    st.markdown(f"## 📝 Marking Records: {teacher_dept}")
+    
+    df_students = get_data("'STUDENTS LIST'!A:Z")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_disc = st.selectbox("1. Discipline", df_students['DISCIPLINE'].unique() if not df_students.empty else [])
+    with col2:
+        selected_batch = st.selectbox("2. Batch", df_students['BATCH'].unique() if not df_students.empty else [])
+
+    # Auto-Semester
+    match = df_students[(df_students['BATCH'] == selected_batch) & (df_students['DISCIPLINE'] == selected_disc)]
+    semester = match.iloc[0]['SEMESTER'] if not match.empty else "N/A"
+    
+    # Auto Date & Day
+    now = datetime.now()
+    st.warning(f"📅 {now.strftime('%Y-%m-%d')} | {now.strftime('%A')} | {semester} Semester")
+
+    subject = st.text_input("📖 Subject Name")
+    topic = st.text_area("🗒️ Lecture Record (Topic)")
+
+    if not match.empty:
+        st.markdown("### 📋 Student List")
+        attendance_results = []
+        for i, row in match.iterrows():
+            c_n, c_s = st.columns([3, 2])
+            status = c_s.radio(f"{row['STUDENT NAME']}", ["P", "A", "L", "S/L"], horizontal=True, key=f"at_{i}")
+            attendance_results.append({"name": row['STUDENT NAME'], "father": row['Father Name'], "status": status})
+
+        if st.button("✅ SUBMIT RECORD TO DATABASE"):
+            if not subject or not topic:
+                st.error("Please enter Subject and Topic!")
+            else:
+                final_rows = []
+                for res in attendance_results:
+                    fine = 100 if res['status'] == 'A' else 0
+                    final_rows.append([
+                        now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"), now.strftime("%A"), 
+                        "Slot", user['Full Name'], teacher_dept, selected_disc, 
+                        subject.upper(), "Start", "End", "Duration", 
+                        topic, res['name'], res['father'], res['status'], 
+                        fine, selected_batch, semester
+                    ])
+                submit_attendance(final_rows)
+                st.balloons()
+                st.success(f"✅ DATA RECORDED SUCCESSFULLY FOR {teacher_dept}")
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
