@@ -47,7 +47,7 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 def show_login():
-    st.title("🎓 ALLIED HEALTH SCIENCES PORTAL")
+    st.title("🎓 WELCOME TO DEPARTMENT OF ALLIED HEALTH SCIENCES")
     st.subheader("Authorized Access Only")
     
     with st.form("login_form"):
