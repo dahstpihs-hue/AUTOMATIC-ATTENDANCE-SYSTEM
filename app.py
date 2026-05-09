@@ -47,19 +47,16 @@ def get_data(range_name):
         result = service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=range_name).execute()
         values = result.get('values', [])
         if not values: return pd.DataFrame()
-        # Header normalization (removes spaces, fixes case)
         df = pd.DataFrame(values[1:], columns=values[0])
         df.columns = df.columns.str.strip().str.title()
         return df
-    except Exception as e:
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 def update_password_sync(username, new_password):
     try:
         service = get_service()
         df = get_data("USERS_CREDENTIALS!A:F")
         row_idx = df[df['Username'] == username].index[0] + 2
-        # Update Password (Column E) and set Is_First_Login to FALSE (Column F)
         range_to_update = f"USERS_CREDENTIALS!E{row_idx}:F{row_idx}"
         body = {'values': [[new_password, "FALSE"]]}
         service.spreadsheets().values().update(
@@ -122,7 +119,6 @@ if not st.session_state.logged_in:
                     elif role_sel != 'Student':
                         st.error("❌ Incorrect Credentials")
 
-        # Password Reset Trigger
         if st.session_state.get('needs_reset'):
             st.markdown("---")
             st.warning("🔒 First Time Login: Security ke liye password tabdeel karein!")
@@ -130,9 +126,25 @@ if not st.session_state.logged_in:
             if st.button("Save & Login"):
                 if len(new_p) >= 5:
                     if update_password_sync(st.session_state.temp_user['Username'], new_p):
-                        st.success("✅ Password Updated in Sheet! Please login again.")
+                        st.success("✅ Password Updated! Please login again.")
                         time.sleep(2)
                         st.session_state.needs_reset = False
                         st.rerun()
                 else: st.error("Password kam az kam 5 huroof ka ho.")
     else:
+        st.error("⚠️ Connection Error: Database load nahi ho raha.")
+
+# --- 6. MASTER DASHBOARD ---
+else:
+    u = st.session_state.user
+    role = u['Role']
+    st.sidebar.success(f"Log: {u['Full Name']}")
+    st.title(f"🛡️ {role} Dashboard")
+    
+    if role in ['HOD', 'COORDINATOR', 'Faculty']:
+        st.info(f"Welcome {u['Full Name']}. Portal for {role} is fully operational.")
+        # Mark Attendance Button and Logic can follow here
+        
+    if st.sidebar.button("Secure Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
