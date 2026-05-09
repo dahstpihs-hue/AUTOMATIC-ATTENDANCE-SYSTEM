@@ -41,7 +41,6 @@ def get_service():
 def get_data(tab_name):
     try:
         service = get_service()
-        # Using single quotes to handle spaces in tab names automatically
         range_name = f"'{tab_name}'!A:Z"
         result = service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=range_name).execute()
         values = result.get('values', [])
@@ -49,13 +48,13 @@ def get_data(tab_name):
         df = pd.DataFrame(values[1:], columns=values[0])
         df.columns = df.columns.str.strip()
         return df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-    except Exception:
-        return pd.DataFrame()
+    except Exception: return pd.DataFrame()
 
 def save_attendance(rows):
     try:
         service = get_service()
         body = {'values': rows}
+        # Saving to ATTENDANCE HISTORY
         service.spreadsheets().values().append(
             spreadsheetId=SHEET_ID, range="'ATTENDANCE HISTORY'!A:R",
             valueInputOption="RAW", body=body).execute()
@@ -89,8 +88,7 @@ if not st.session_state.logged_in:
             if st.button("LOGIN"):
                 match = users_df[(users_df['Role'].str.contains(role_sel, case=False, na=False)) & (users_df['Password'] == pwd.strip())]
                 if not match.empty:
-                    st.session_state.logged_in = True
-                    st.session_state.user_data = match.iloc[0].to_dict()
+                    st.session_state.logged_in, st.session_state.user_data = True, match.iloc[0].to_dict()
                     st.rerun()
                 else: st.error("Access Denied")
         elif role_sel == 'FACULTY MEMBER':
@@ -108,12 +106,11 @@ else:
     user = st.session_state.user_data
     st.sidebar.success(f"User: {user['Full Name']}")
     
-    # Check if user has permission
     if any(r.strip().lower() in ['hod', 'coordinator', 'faculty'] for r in user['Role'].split(',')):
-        st.header(f"🛡️ {user['Role']} Operations")
+        st.header(f"🛡️ {user['Role']} Operations Panel")
         
-        # Load Students from "STUDENTS LIST" tab
-        std_df = get_data("STUDENTS LIST")
+        # Load Students from MASTER STUDENTS LIST
+        std_df = get_data("MASTER STUDENTS LIST")
         
         if not std_df.empty:
             c1, c2 = st.columns(2)
@@ -125,24 +122,28 @@ else:
             st.info(f"Marking: {disc} | Batch: {batch} | Semester: {sem}")
             
             subj = st.text_input("Subject").upper()
-            topic = st.text_area("Lecture Topic")
+            topic = st.text_area("Lecture Record")
             
             attendance_list = []
+            st.markdown("---")
             for i, row in filtered.iterrows():
                 col1, col2 = st.columns([3, 2])
-                stat = col2.radio(f"{row['STUDENT NAME']}", ["P", "A", "L", "S/L"], horizontal=True, key=f"s_{i}")
+                col1.write(f"**{row['STUDENT NAME']}** (S/O {row.get('Father Name', 'N/A')})")
+                stat = col2.radio("Status", ["P", "A", "L", "S/L"], horizontal=True, key=f"s_{i}", label_visibility="collapsed")
                 attendance_list.append({"name": row['STUDENT NAME'], "father": row.get('Father Name', 'N/A'), "status": stat})
             
-            if st.button("SUBMIT ATTENDANCE"):
+            if st.button("SUBMIT DAILY ATTENDANCE"):
                 if subj and topic:
                     dt, tm = datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%H:%M:%S")
-                    rows = [[dt, tm, "Day", "Slot", user['Full Name'].upper(), user['Department'], disc, subj, "Start", "End", "Dur", topic, r['name'], r['father'], r['status'], (100 if r['status'] == "A" else 0), batch, sem] for r in attendance_list]
+                    # Calculate Fine: Absent = 100, others 0
+                    rows = [[dt, tm, datetime.now().strftime('%A'), "Slot", user['Full Name'].upper(), user['Department'], disc, subj, "Start", "End", "Duration", topic, r['name'], r['father'], r['status'], (100 if r['status'] == "A" else 0), batch, sem] for r in attendance_list]
+                    
                     if save_attendance(rows):
                         st.balloons()
-                        st.success("✅ DATA RECORDED SUCCESSFULLY")
-                else: st.warning("Please fill Subject and Topic")
+                        st.success(f"✅ RECORDED! Date: {dt} | Instructor: {user['Full Name']}")
+                else: st.warning("Subject and Topic are mandatory!")
         else:
-            st.error("Cannot read 'STUDENTS LIST'. Please check tab name in Google Sheets.")
+            st.error("Cannot read 'MASTER STUDENTS LIST'. Check tab name in Google Sheets.")
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
