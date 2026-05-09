@@ -33,6 +33,7 @@ st.markdown("""
         border: 2px solid #FFD700; 
         box-shadow: 0px 10px 40px rgba(0,0,0,0.9);
         text-align: center;
+        margin-bottom: 20px;
     }
     
     .stButton>button { 
@@ -59,12 +60,12 @@ def get_data(range_name):
         values = result.get('values', [])
         if not values: return pd.DataFrame()
         df = pd.DataFrame(values[1:], columns=values[0])
-        # Cleaning columns and data
         df.columns = df.columns.str.strip()
+        # Clean white spaces from all data
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
         return df
     except Exception as e:
-        st.error(f"Database Connection Error: {e}")
+        st.error(f"Database Error: {e}")
         return pd.DataFrame()
 
 # --- 4. HEADER & CELEBRATIONS ---
@@ -75,7 +76,7 @@ if 'first_load' not in st.session_state:
 st.markdown("""
 <div class="gateway-master">
     <div class="blinking-text">WELCOME TO THE</div>
-    <h1 style="color:white; font-size:26px; letter-spacing: 2px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
+    <h1 style="color:white; font-size:26px; letter-spacing: 2px; margin-top:10px;">DEPARTMENT OF ALLIED HEALTH SCIENCES</h1>
     <p style="color:#FFD700; font-size:18px;">THE PROFESSIONAL INSTITUTE OF HEALTH SCIENCES MARDAN</p>
 </div>
 """, unsafe_allow_html=True)
@@ -85,7 +86,6 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    # Important: Space in sheet name handled with single quotes
     users_df = get_data("'USERS CREDENTIALS'!A:F")
     
     cols = st.columns([1, 1.5, 1])
@@ -98,46 +98,48 @@ if not st.session_state.logged_in:
             pass_input = st.text_input("ENTER SYSTEM PASSWORD", type="password")
             if st.button("AUTHORIZE & ENTER"):
                 if not users_df.empty:
-                    # Robust matching for HOD and Coordinator
-                    match = users_df[(users_df['Role'] == role_selection) & (users_df['Password'] == pass_input)]
+                    # Smart matching: Search if selection exists in Role string (e.g. 'HOD' in 'HOD, faculty')
+                    match = users_df[
+                        (users_df['Role'].str.contains(role_selection, case=False, na=False)) & 
+                        (users_df['Password'] == pass_input.strip())
+                    ]
                     if not match.empty:
                         st.session_state.logged_in = True
                         st.session_state.user_data = match.iloc[0].to_dict()
                         st.rerun()
                     else: st.error("❌ Incorrect Password!")
-                else: st.error("⚠️ Database Error: No User data found.")
 
         elif role_selection == 'FACULTY MEMBER':
             if not users_df.empty:
-                faculty_list = users_df[users_df['Role'] == 'Faculty']['Full Name'].tolist()
-                selected_faculty = st.selectbox("SELECT YOUR NAME:", faculty_list)
+                # Get names where role contains 'Faculty'
+                fac_list = users_df[users_df['Role'].str.contains('Faculty', case=False, na=False)]['Full Name'].tolist()
+                selected_faculty = st.selectbox("SELECT YOUR NAME:", fac_list)
                 f_pass_input = st.text_input("PASSWORD", type="password")
                 if st.button("VERIFY FACULTY"):
-                    match = users_df[(users_df['Full Name'] == selected_faculty) & (users_df['Password'] == f_pass_input)]
+                    match = users_df[(users_df['Full Name'] == selected_faculty) & (users_df['Password'] == f_pass_input.strip())]
                     if not match.empty:
                         st.session_state.logged_in = True
                         st.session_state.user_data = match.iloc[0].to_dict()
                         st.rerun()
-                    else: st.error("❌ Incorrect Credentials")
+                    else: st.error("❌ Invalid Credentials")
 
         elif role_selection == 'STUDENT':
             if st.button("ENTER STUDENT PORTAL"):
                 st.session_state.logged_in = True
-                st.session_state.user_data = {'Role': 'Student', 'Full Name': 'Student Viewer'}
+                st.session_state.user_data = {'Role': 'Student', 'Full Name': 'Portal Guest'}
                 st.rerun()
 
-# --- 6. DASHBOARDS ---
+# --- 6. DASHBOARD AREA ---
 else:
     user = st.session_state.user_data
-    st.sidebar.success(f"Access Granted: {user['Full Name']}")
+    st.sidebar.success(f"Session Active: {user['Full Name']}")
     st.title(f"🛡️ {user['Role']} Dashboard")
     
-    # Universal Marking Attendance Tool for HOD, Coord, and Faculty
-    if user['Role'] in ['HOD', 'COORDINATOR', 'Faculty', 'FACULTY MEMBER']:
-        st.markdown("### 📝 Mark Attendance & Lecture Record")
-        st.info("Aap yahan se apni classes ki attendance aur lecture record update kar sakte hain.")
-        # Future Attendance function goes here
-            
+    # Combined Rights for HOD, Coordinator, and Faculty
+    if any(role.strip().lower() in ['hod', 'coordinator', 'faculty'] for role in user['Role'].split(',')):
+        st.markdown("### 📝 Operations Management")
+        st.info("Aap yahan se attendance aur lecture records manage kar sakte hain.")
+
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
