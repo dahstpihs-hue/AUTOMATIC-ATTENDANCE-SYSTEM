@@ -60,9 +60,12 @@ if (isPlaceholder) {
       this.orderCol = null;
       this.ascending = true;
       this.limitVal = null;
+      this.action = "select";
+      this.payload = null;
     }
 
     select(cols = "*") {
+      this.action = "select";
       return this;
     }
 
@@ -104,34 +107,21 @@ if (isPlaceholder) {
       });
     }
 
-    async insert(payload) {
-      const items = Array.isArray(payload) ? payload : [payload];
-      const newItems = items.map(item => ({
-        id: item.id || Math.random().toString(36).substring(2, 9),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        ...item
-      }));
-      this.data.push(...newItems);
-      writeTable(this.table, this.data);
-      return { data: Array.isArray(payload) ? newItems : newItems[0], error: null };
+    insert(payload) {
+      this.action = "insert";
+      this.payload = payload;
+      return this;
     }
 
-    async update(payload) {
-      const matching = this.getMatching();
-      matching.forEach(item => {
-        Object.assign(item, payload, { updated_at: new Date().toISOString() });
-      });
-      writeTable(this.table, this.data);
-      return { data: matching, error: null };
+    update(payload) {
+      this.action = "update";
+      this.payload = payload;
+      return this;
     }
 
-    async delete() {
-      const matching = this.getMatching();
-      const ids = matching.map(m => m.id);
-      const remaining = this.data.filter(item => !ids.includes(item.id));
-      writeTable(this.table, remaining);
-      return { data: matching, error: null };
+    delete() {
+      this.action = "delete";
+      return this;
     }
 
     getMatching() {
@@ -143,7 +133,34 @@ if (isPlaceholder) {
     }
 
     then(onfulfilled) {
-      let result = this.getMatching();
+      let result = [];
+      let error = null;
+
+      if (this.action === "insert") {
+        const items = Array.isArray(this.payload) ? this.payload : [this.payload];
+        const newItems = items.map(item => ({
+          id: item.id || Math.random().toString(36).substring(2, 9),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          ...item
+        }));
+        this.data.push(...newItems);
+        writeTable(this.table, this.data);
+        result = newItems;
+      } else if (this.action === "update") {
+        result = this.getMatching();
+        result.forEach(item => {
+          Object.assign(item, this.payload, { updated_at: new Date().toISOString() });
+        });
+        writeTable(this.table, this.data);
+      } else if (this.action === "delete") {
+        result = this.getMatching();
+        const ids = result.map(m => m.id);
+        const remaining = this.data.filter(item => !ids.includes(item.id));
+        writeTable(this.table, remaining);
+      } else {
+        result = this.getMatching();
+      }
 
       if (this.orderCol) {
         result.sort((a, b) => {
@@ -159,7 +176,11 @@ if (isPlaceholder) {
         result = result.slice(0, this.limitVal);
       }
 
-      return Promise.resolve({ data: result, error: null }).then(onfulfilled);
+      const outputData = (this.action === "insert" && !Array.isArray(this.payload)) 
+        ? result[0] 
+        : result;
+
+      return Promise.resolve({ data: outputData, error: null }).then(onfulfilled);
     }
   }
 
