@@ -65,7 +65,9 @@ if (isPlaceholder) {
     }
 
     select(cols = "*") {
-      this.action = "select";
+      if (this.action === "select" || !this.action) {
+        this.action = "select";
+      }
       return this;
     }
 
@@ -176,11 +178,7 @@ if (isPlaceholder) {
         result = result.slice(0, this.limitVal);
       }
 
-      const outputData = (this.action === "insert" && !Array.isArray(this.payload)) 
-        ? result[0] 
-        : result;
-
-      return Promise.resolve({ data: outputData, error: null }).then(onfulfilled);
+      return Promise.resolve({ data: result, error: null }).then(onfulfilled);
     }
   }
 
