@@ -30,7 +30,7 @@ setError(err.response?.data?.message || "Failed to load teacher profile");
 
   return (
     <div className="container">
-      <h2>Teacher Profile</h2>
+      <h2>Faculty Profile</h2>
       <p><b>Name:</b> {teacher.name}</p>
       <p><b>Email:</b> {teacher.email}</p>
       <p><b>Phone:</b> {teacher.phone}</p>

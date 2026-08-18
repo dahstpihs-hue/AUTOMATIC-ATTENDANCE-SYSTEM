@@ -1,47 +1,108 @@
+// backend/routes/fees.js
 const express = require('express');
-const Fee = require('../models/Fee');
+const supabase = require('../supabaseClient');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
 
-// Add new fee record (admin + accountant)
-router.post('/', auth(['admin', 'accountant']), async (req, res) => {
+function mapFee(f) {
+  if (!f) return null;
+  return {
+    _id: f.id,
+    student: f.student ? {
+      _id: f.student.id,
+      name: f.student.name,
+      class: f.student.class,
+      section: f.student.section,
+      rollNumber: f.student.roll_number,
+    } : f.student_id,
+    amount: Number(f.amount),
+    dueDate: f.due_date,
+    paid: f.paid,
+    paidOn: f.paid_on,
+    paymentMode: f.payment_mode,
+    discount: Number(f.discount || 0),
+    fine: Number(f.fine || 0),
+    note: f.note,
+    createdAt: f.created_at,
+    updatedAt: f.updated_at
+  };
+}
+
+// Generate fee installments: HOD only
+router.post('/', auth(['admin']), async (req, res) => {
   try {
-    const fee = await Fee.create(req.body); // new fee entry
-    res.json(fee);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const { student, amount, dueDate, paid, paidOn, paymentMode, discount, fine, note } = req.body;
+    
+    // Map frontend key 'student' (which holds student ID) to 'student_id'
+    const { data: fee, error } = await supabase
+      .from('fees')
+      .insert({
+        student_id: student,
+        amount: Number(amount),
+        due_date: dueDate,
+        paid: paid || false,
+        paid_on: paidOn || null,
+        payment_mode: paymentMode || 'cash',
+        discount: Number(discount || 0),
+        fine: Number(fine || 0),
+        note: note || null
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(mapFee(fee));
+  } catch (err) { 
+    res.status(500).json({ error: err.message }); 
+  }
 });
 
-// Get all fee records (admin + accountant + teacher)
-router.get('/', auth(['admin', 'accountant', 'teacher']), async (req, res) => {
+// View fee records: HOD full control, Coordinator view only
+router.get('/', auth(['admin', 'coordinator']), async (req, res) => {
   try {
-    const list = await Fee
-      .find()
-      .populate('student') // student detail show
-      .sort({ createdAt: -1 }); // latest first
-    res.json(list);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const { data: list, error } = await supabase
+      .from('fees')
+      .select('*, student:students(*)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json((list || []).map(mapFee));
+  } catch (err) { 
+    res.status(500).json({ error: err.message }); 
+  }
 });
 
-// Mark fee as paid (admin + accountant)
-router.put('/:id/pay', auth(['admin', 'accountant']), async (req, res) => {
+// Mark payment as cleared: HOD only
+router.put('/:id/pay', auth(['admin']), async (req, res) => {
   try {
-    const paidFee = await Fee.findByIdAndUpdate(
-      req.params.id,
-      { paid: true, paidOn: new Date() }, // paid mark
-      { new: true }
-    );
-    res.json(paidFee);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const { data: paidFee, error } = await supabase
+      .from('fees')
+      .update({ 
+        paid: true, 
+        paid_on: new Date().toISOString() 
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(mapFee(paidFee));
+  } catch (err) { 
+    res.status(500).json({ error: err.message }); 
+  }
 });
 
-// pehle aisa tha:
-// router.get('/:id/invoice', auth(['admin','accountant','teacher']), async (...) => {
-
+// Generate Fee Invoice PDF
 router.get('/:id/invoice', async (req, res) => {
   try {
-    const fee = await Fee.findById(req.params.id).populate('student');
-    if (!fee) return res.status(404).json({ message: "Fee record not found" });
+    const { data: fee, error } = await supabase
+      .from('fees')
+      .select('*, student:students(*)')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (error || !fee) return res.status(404).json({ message: "Fee record not found" });
 
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ margin: 40 });
@@ -49,20 +110,20 @@ router.get('/:id/invoice', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename=invoice_${fee.student.name}.pdf`
+      `attachment; filename=invoice_${fee.student?.name || 'student'}.pdf`
     );
     doc.pipe(res);
 
     doc.fontSize(20).text("School Fee Invoice", { align: 'center' });
     doc.moveDown();
 
-    doc.fontSize(12).text(`Student Name: ${fee.student.name}`);
-    doc.text(`Class & Section: ${fee.student.class} - ${fee.student.section}`);
-    doc.text(`Amount: ₹${fee.amount}`);
-    doc.text(`Due Date: ${new Date(fee.dueDate).toDateString()}`);
+    doc.fontSize(12).text(`Student Name: ${fee.student?.name || 'N/A'}`);
+    doc.text(`Class & Section: ${fee.student?.class || 'N/A'} - ${fee.student?.section || 'N/A'}`);
+    doc.text(`Amount: PKR ${fee.amount}`);
+    doc.text(`Due Date: ${new Date(fee.due_date).toDateString()}`);
     doc.text(`Status: ${fee.paid ? 'Paid' : 'Pending'}`);
-    if (fee.paid && fee.paidOn) {
-      doc.text(`Paid On: ${new Date(fee.paidOn).toDateString()}`);
+    if (fee.paid && fee.paid_on) {
+      doc.text(`Paid On: ${new Date(fee.paid_on).toDateString()}`);
     }
 
     doc.moveDown();
@@ -74,9 +135,4 @@ router.get('/:id/invoice', async (req, res) => {
   }
 });
 
-
 module.exports = router;
-
-
-
-

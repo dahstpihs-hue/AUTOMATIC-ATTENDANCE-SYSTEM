@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useCallback, useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "../../../api/api";
 
 /*
@@ -11,6 +11,7 @@ import api from "../../../api/api";
 const StudentFees = () => {
   // student id coming from route
   const { id } = useParams();
+  const navigate = useNavigate();
 
   // ----------------------------
   // STATE VARIABLES
@@ -28,24 +29,21 @@ const StudentFees = () => {
   // ----------------------------
   // LOAD ALL FEES OF THIS STUDENT
   // ----------------------------
-  const loadFees = async () => {
+  const loadFees = useCallback(async () => {
     try {
-      const res = await api.get("/fees");
-
-      // filter fees only for this student
-      const studentFees = res.data.filter(
-        (fee) => fee.student?._id === id
-      );
-
-      setFees(studentFees);
+      // Fetch fees specifically for this student for efficiency
+      const res = await api.get(`/fees?student=${id}`);
+      setFees(res.data);
     } catch (error) {
       console.error("Failed to load fees", error);
+      alert("Failed to load student fees. You may be redirected.");
+      navigate("/admin/students");
     }
-  };
+  }, [id, navigate]);
 
   useEffect(() => {
     loadFees();
-  }, [id]);
+  }, [loadFees]);
 
   // ----------------------------
   // ADD NEW FEES (ADMIN ONLY)
@@ -132,7 +130,7 @@ const StudentFees = () => {
     .filter((fee) => fee.paid)
     .reduce((sum, fee) => sum + fee.amount, 0);
 
-  // FINAL ERP LOGIC
+  // FINAL TPIHS FEE LOGIC
   const netPayable = totalAssigned - totalDiscount + totalFine;
   const remaining = Math.max(netPayable - totalPaid, 0);
 
@@ -191,7 +189,7 @@ const StudentFees = () => {
 
                 {"  "}
                 <a
-                  href={`http://localhost:8080/api/fees/${fee._id}/invoice`}
+                  href={`${import.meta.env.VITE_API_BASE || "http://localhost:8080"}/api/fees/${fee._id}/invoice?token=${sessionStorage.getItem("token")}`}
                   target="_blank"
                   rel="noreferrer"
                 >

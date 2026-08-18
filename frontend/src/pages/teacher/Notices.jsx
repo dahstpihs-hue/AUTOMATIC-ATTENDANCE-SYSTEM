@@ -5,7 +5,7 @@ import api from '../../api/api';
 export default function Notices() {
   const [notices, setNotices] = useState([]);
   const [form, setForm] = useState({ title: '', message: '', audience: 'all', eventDate: '' });
-  const user = JSON.parse(localStorage.getItem('user'));
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
 
   useEffect(() => {
     load();
@@ -77,9 +77,8 @@ export default function Notices() {
               onChange={(e) => setForm({ ...form, audience: e.target.value })}
             >
               <option value="all">All</option>
-              <option value="teachers">Teachers</option>
+              <option value="teachers">Faculty</option>
               <option value="students">Students</option>
-              <option value="parents">Parents</option>
             </select>
           </label>
           <button>Add Notice</button>

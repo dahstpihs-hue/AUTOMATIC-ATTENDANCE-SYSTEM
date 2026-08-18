@@ -1,214 +1,164 @@
-// frontend/src/pages/Teachers.jsx
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import React, { useEffect, useState } from "react";
 import api from "../../../api/api";
 
-export default function Teachers() {
-  // Teacher list
-  const [teachers, setTeachers] = useState([]);
-  // Add/edit form data
+const DEPARTMENTS = [
+  { value: "RADIOLOGY", label: "RADIOLOGY", className: "dept-radiology" },
+  { value: "MLT", label: "MLT", className: "dept-mlt" },
+  { value: "DENTAL", label: "DENTAL", className: "dept-dental" },
+  { value: "ANAESTHESIA", label: "ANAESTHESIA", className: "dept-anaesthesia" },
+];
+const SEMESTERS = ["SEMESTER 1", "SEMESTER 2", "SEMESTER 3", "SEMESTER 4", "SEMESTER 5", "SEMESTER 6", "SEMESTER 7", "SEMESTER 8"];
+
+function selectedDepartment(value) {
+  return DEPARTMENTS.find((department) => department.value === value) || DEPARTMENTS[0];
+}
+
+export default function AddFaculty() {
   const [form, setForm] = useState({
     name: "",
-    email: "",
-    phone: "",
-    subject: "",
-    className: "",
-    section: "",
-    password: "",
+    overallSerial: "",
+    departmentSerial: "",
+    semester: "",
+    department: "RADIOLOGY",
   });
-  // Agar edit mode me hain to yaha teacher ka id save hoga
-  const [editingId, setEditingId] = useState(null);
-
-  // Add hone ke baad admin ko credentials dikhane ke liye
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
   const [lastCreds, setLastCreds] = useState(null);
 
-  useEffect(() => {
-    loadTeachers();
-  }, []);
-
-  // Backend se teacher list laana
-  const loadTeachers = async () => {
-    const { data } = await api.get("/teachers");
-    setTeachers(data);
+  const update = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
   };
 
-  // Add / Save button pe click
-  const submit = async (e) => {
-  e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
 
-  try {
-    const body = {
-  name: form.name,
-  email: form.email,
-  phone: form.phone,
-  subject: form.subject,
-  class: form.className,     // ✅ FIX
-  section: form.section,
-  password: form.password
-};
-
-
-    const { data } = await api.post("/teachers", body);
-
-    setLastCreds(data.credentials || null);
-
-    // reset form
-    setForm({
-      name: "",
-      email: "",
-      phone: "",
-      subject: "",
-      className: "",
-      section: "",
-      password: ""
-    });
-
-    loadTeachers();
-
-  } catch (err) {
-    alert(
-      err.response?.data?.message ||
-      "Failed to add teacher"
-    );
-  }
-};
-
-
-  // Edit click -> form ko fill karo
-  const startEdit = (t) => {
-    setEditingId(t._id);
-    setForm({
-      name: t.name,
-      email: t.email,    // edit ke time email change allowable ya nahi – abhi sirf display
-      phone: t.phone || "",
-      subject: t.subject,
-      class: t.class,
-      section: t.section,
-      password: "",      // edit ke time password change nahi kar rahe
-    });
+    try {
+      const { data } = await api.post("/teachers", form);
+      setLastCreds(data.credentials || null);
+      setMessage(data.message || "FACULTY ADDED SUCCESSFULLY");
+      setForm({
+        name: "",
+        overallSerial: "",
+        departmentSerial: "",
+        semester: "",
+        department: "RADIOLOGY",
+      });
+    } catch (error) {
+      setMessage(error.response?.data?.message || "FAILED TO ADD FACULTY");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Delete teacher
-  const removeTeacher = async (id) => {
-    if (!window.confirm("Delete this teacher?")) return;
-    await api.delete(`/teachers/${id}`);
-    loadTeachers();
-  };
+  const department = selectedDepartment(form.department);
 
   return (
-    <div className="container">
-      <h2>Teachers (Admin)</h2>
+    <div className="container entry-page">
+      <div className="entry-header">
+        <div>
+          <p className="eyebrow">TPIHS FACULTY ENTRY</p>
+          <h2>ADD FACULTY</h2>
+        </div>
+        <Link className="link-action primary-action" to="/admin/teachers/list">
+          VIEW FACULTY
+        </Link>
+      </div>
 
-      {/* ADD / EDIT FORM */}
-      <form onSubmit={submit} className="card" style={{ marginBottom: 16 }}>
-        <h3>{editingId ? "Edit Teacher" : "Add Teacher"}</h3>
+      <form onSubmit={submit} className="card entry-card">
+        <div className={`entry-strip ${department.className}`}>
+          {department.label} FACULTY RECORD
+        </div>
 
-        <input
-          placeholder="Name"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
-        />
+        <div className="form-grid faculty-entry-grid">
+          <label>
+            <span>OVERALL SERIAL NO</span>
+            <input
+              min="1"
+              placeholder="FIRST TO LAST SERIAL"
+              type="number"
+              value={form.overallSerial}
+              onChange={(event) => update("overallSerial", event.target.value)}
+              required
+            />
+          </label>
 
-        <input
-          type="email"
-          placeholder="Email (Login ID)"
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-          required={!editingId} // add ke time required, edit ke time optional
-        />
+          <label>
+            <span>DEPARTMENT SERIAL NO</span>
+            <input
+              min="1"
+              placeholder="DEPARTMENT-WISE SERIAL"
+              type="number"
+              value={form.departmentSerial}
+              onChange={(event) => update("departmentSerial", event.target.value)}
+              required
+            />
+          </label>
 
-        <input
-          placeholder="Phone"
-          value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
-        />
+          <label>
+            <span>FACULTY NAME</span>
+            <input
+              placeholder="ENTER FACULTY NAME"
+              value={form.name}
+              onChange={(event) => update("name", event.target.value.toUpperCase())}
+              required
+            />
+          </label>
 
-        <input
-          placeholder="Subject"
-          value={form.subject}
-          onChange={(e) => setForm({ ...form, subject: e.target.value })}
-          required
-        />
+          <label>
+            <span>SEMESTER / ASSIGNMENT</span>
+            <select
+              value={form.semester}
+              onChange={(event) => update("semester", event.target.value)}
+              required
+            >
+              <option value="">SELECT SEMESTER</option>
+              {SEMESTERS.map((semester) => (
+                <option key={semester} value={semester}>
+                  {semester}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <input
-          placeholder="Class"
-          value={form.className}
-          onChange={(e) => setForm({ ...form, className: e.target.value })}
-          required
-        />
+          <label>
+            <span>DEPARTMENT</span>
+            <select
+              className={`program-select ${department.className}`}
+              value={form.department}
+              onChange={(event) => update("department", event.target.value)}
+              required
+            >
+              {DEPARTMENTS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
-        <input
-          placeholder="Section"
-          value={form.section}
-          onChange={(e) => setForm({ ...form, section: e.target.value })}
-          required
-        />
-
-        {/* Password only while creating */}
-        {!editingId && (
-          <input
-            type="password"
-            placeholder="Password (for teacher login)"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            required
-          />
-        )}
-
-        <button type="submit">
-          {editingId ? "Save Changes" : "Add Teacher"}
+        <button className="primary-action submit-wide" type="submit" disabled={saving}>
+          {saving ? "ADDING FACULTY..." : "ADD FACULTY AND GENERATE LOGIN"}
         </button>
       </form>
 
-      {/* Last created teacher credentials */}
+      {message && <div className="card status-card">{message.toUpperCase()}</div>}
+
       {lastCreds && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h4>Last Created Teacher Credentials</h4>
-          <p>
-            Email (Login ID): <b>{lastCreds.email}</b>
-          </p>
-          <p>
-            Password: <b>{lastCreds.password}</b>
-          </p>
+        <div className="credentials-grid">
+          <div className="credential-card">
+            <span>USERNAME</span>
+            <strong>{lastCreds.username || lastCreds.email}</strong>
+          </div>
+          <div className="credential-card">
+            <span>PASSWORD</span>
+            <strong>{lastCreds.password}</strong>
+          </div>
         </div>
       )}
-
-      {/* TEACHER LIST */}
-      <h3>All Teachers</h3>
-      <ul>
-        {teachers.map((t) => (
-          <li
-            key={t._id}
-            style={{
-              marginBottom: 8,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            {/* Teacher info */}
-            <span>
-              <Link to={`/admin/teachers/${t._id}`}>
-                <b>{t.name}</b> — {t.email} — {t.subject} ({t.class} {t.section})
-              </Link>
-            </span>
-
-            {/* Actions */}
-            <span>
-              <button onClick={() => startEdit(t)}>Edit</button>
-              <button
-                onClick={() => removeTeacher(t._id)}
-                style={{ marginLeft: 8 }}
-              >
-                Delete
-              </button>
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      {teachers.length === 0 && <p>No teachers found</p>}
     </div>
   );
 }

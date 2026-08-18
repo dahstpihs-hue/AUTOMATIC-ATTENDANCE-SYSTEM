@@ -6,7 +6,7 @@ export default function Report() {
   const { id } = useParams();
 
   const download = () => {
-    const token = localStorage.getItem("token");
+    const token = sessionStorage.getItem("token");
     window.open(`http://localhost:8080/api/students/${id}/report?token=${token}`);
   };
 

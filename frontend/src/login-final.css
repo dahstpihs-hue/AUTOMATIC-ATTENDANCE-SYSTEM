@@ -1,0 +1,160 @@
+/* Final login-only overrides. Imported after styles.css. */
+.login-shell {
+  grid-template-rows: auto minmax(0, 1fr) auto !important;
+  justify-items: center !important;
+  align-items: center !important;
+  background:
+    linear-gradient(90deg, rgba(2, 6, 23, 0.54) 0 26%, rgba(2, 6, 23, 0.12) 38% 62%, rgba(2, 6, 23, 0.54) 74% 100%),
+    url("./assets/tpihs-login-medical-bg.png"),
+    #07111f !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+
+.login-brand {
+  display: inline-flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  justify-self: center !important;
+  width: fit-content !important;
+  max-width: calc(100vw - 48px) !important;
+  padding: 12px 22px !important;
+  margin: 0 auto !important;
+  border-radius: 18px !important;
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.99), rgba(1, 22, 39, 0.98)),
+    #000000 !important;
+  border: 1px solid rgba(255, 255, 255, 0.62) !important;
+  box-shadow:
+    0 20px 54px rgba(0, 0, 0, 0.82),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 0 0 1px rgba(45, 212, 191, 0.72),
+    0 0 66px rgba(45, 212, 191, 0.62) !important;
+  text-align: center !important;
+}
+
+.login-brand .eyebrow,
+.login-brand h1,
+.login-brand .institute-glow {
+  display: block !important;
+  width: auto !important;
+  max-width: calc(100vw - 88px) !important;
+  margin: 0 auto !important;
+  color: #ffffff !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
+  text-align: center !important;
+  text-shadow:
+    0 0 8px rgba(255, 255, 255, 1),
+    0 0 20px rgba(45, 212, 191, 1),
+    0 0 42px rgba(56, 189, 248, 0.95),
+    0 2px 10px rgba(0, 0, 0, 1) !important;
+}
+
+.login-brand .eyebrow {
+  font-size: clamp(15px, 1.7vw, 22px) !important;
+}
+
+.login-brand h1 {
+  font-size: clamp(14px, 2.25vw, 34px) !important;
+  letter-spacing: 0.01em !important;
+  white-space: nowrap !important;
+  max-width: none !important;
+}
+
+.login-brand .institute-glow {
+  font-size: clamp(16px, 1.9vw, 27px) !important;
+}
+
+.book-page-right .eyebrow {
+  color: #facc15 !important;
+  text-shadow:
+    0 0 10px rgba(250, 204, 21, 1),
+    0 0 26px rgba(56, 189, 248, 0.75) !important;
+}
+
+.developer-credit {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  justify-self: center !important;
+  width: fit-content !important;
+  max-width: calc(100vw - 48px) !important;
+  padding: 10px 18px !important;
+  margin: 0 auto !important;
+  border-radius: 18px !important;
+  white-space: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.99), rgba(36, 7, 62, 0.98)),
+    #000000 !important;
+  border: 1px solid rgba(255, 255, 255, 0.58) !important;
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.78),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(244, 114, 182, 0.58),
+    0 0 58px rgba(244, 114, 182, 0.58) !important;
+}
+
+.developer-credit span {
+  display: inline-block !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  white-space: pre !important;
+}
+
+.developer-credit .credit-space {
+  display: inline-block !important;
+  width: 0.46em !important;
+  min-width: 0.46em !important;
+}
+
+.password-eye {
+  width: auto !important;
+  min-height: 34px !important;
+  margin: -2px 0 10px auto !important;
+  padding: 7px 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(250, 204, 21, 0.56) !important;
+  background: linear-gradient(135deg, rgba(2, 6, 23, 0.88), rgba(120, 53, 15, 0.78)) !important;
+  color: #fef3c7 !important;
+  font-size: 13px !important;
+  font-weight: 1000 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.10),
+    0 0 18px rgba(250, 204, 21, 0.26) !important;
+}
+
+.password-eye::before {
+  content: "👁";
+  margin-right: 6px;
+}
+
+@media (max-width: 760px) {
+  .login-brand {
+    max-width: calc(100vw - 20px) !important;
+    padding: 10px 12px !important;
+  }
+
+  .login-brand .eyebrow,
+  .login-brand h1,
+  .login-brand .institute-glow {
+    max-width: calc(100vw - 48px) !important;
+    white-space: normal !important;
+  }
+
+  .developer-credit {
+    max-width: calc(100vw - 20px) !important;
+    font-size: 11px !important;
+  }
+}

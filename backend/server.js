@@ -1,14 +1,8 @@
-const User = require("./models/User");
-const bcrypt = require("bcryptjs");
-
 // .env file ke variables load karne ke liye
 require('dotenv').config();
 
 // Express backend server banane ke liye
 const express = require('express');
-
-// MongoDB se connect karne ke liye
-const mongoose = require('mongoose');
 
 // Backend API ko frontend se connect karne ke liye (Cross-Origin)
 const cors = require('cors');
@@ -28,6 +22,15 @@ app.use(cors());
 // Backend ko JSON data receive karne ke layak bana rahe hain
 app.use(express.json());
 
+// Root path handler
+app.get("/", (req, res) => {
+  res.json({
+    status: "success",
+    message: "College ERP System Backend API is running successfully!",
+    documentation: "Access the React frontend at http://localhost:5173"
+  });
+});
+
 // API routes register kar rahe hain (prefix /api rakha gaya)
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentRoutes);
@@ -35,44 +38,15 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/fees', feeRoutes);
 app.use('/api/notices', noticeRoutes);
 app.use("/api/teachers", require("./routes/teachers"));
+app.use("/api/imports", require("./routes/imports"));
+app.use("/api/resources", require("./routes/resources"));
+app.use("/api/ai", require("./routes/ai"));
+app.use("/api/academic", require("./routes/academic"));
 
 
-// Local MongoDB ka URL (data isi database me save hoga)
-const MONGO_URL = "mongodb://127.0.0.1:27017/schoolerp";
-
-// MongoDB connect karne wala function
-async function main() {
-  await mongoose.connect(MONGO_URL);
-}
-main()
-  .then(() => {
-    console.log("Connected to DB ✔️");
-  })
-  .catch((err) => {
-    console.log("Database connection error ❌", err);
-  });
+console.log("Connected to Supabase Database Layer ✔️");
 
 // Express server ko port 8080 par run kar rahe hain
 app.listen(8080, () => {
   console.log("Server is listening at http://localhost:8080");
 });
-
-
-async function createDefaultAdmin() {
-  const adminExists = await User.findOne({ role: "admin" });
-
-  if (!adminExists) {
-    const hashed = await bcrypt.hash("admin123", 10);
-    await User.create({
-      name: "School Principal",
-      email: "admin@school.com",
-      password: hashed,
-      role: "admin"
-    });
-    console.log("✔ Default Admin Created");
-    console.log("   Email: admin@school.com");
-    console.log("   Password: admin123");
-  }
-}
-
-createDefaultAdmin();

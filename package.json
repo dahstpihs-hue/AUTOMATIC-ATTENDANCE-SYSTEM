@@ -1,4 +1,9 @@
 {
+  "name": "college-erp-system",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\""
+  },
   "dependencies": {
     "concurrently": "^9.2.1"
   }

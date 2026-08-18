@@ -1,299 +1,195 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../../../api/api";
 
-export default function Students() {
-  const [classes, setClasses] = useState([]);
-  const [currentClass, setCurrentClass] = useState("");
-  const [students, setStudents] = useState([]);
-  const [search, setSearch] = useState("");
+const PROGRAMS = [
+  { value: "RADIOLOGY", label: "RADIOLOGY", className: "dept-radiology" },
+  { value: "MLT", label: "MLT", className: "dept-mlt" },
+  { value: "DENTAL", label: "DENTAL", className: "dept-dental" },
+  { value: "ANAESTHESIA", label: "ANAESTHESIA", className: "dept-anaesthesia" },
+];
+
+const BATCHES = ["BATCH 1", "BATCH 2", "BATCH 3", "BATCH 4", "BATCH 5"];
+const SEMESTERS = ["SEMESTER 1", "SEMESTER 2", "SEMESTER 3", "SEMESTER 4", "SEMESTER 5", "SEMESTER 6", "SEMESTER 7", "SEMESTER 8"];
+
+function selectedProgram(value) {
+  return PROGRAMS.find((program) => program.value === value) || PROGRAMS[0];
+}
+
+export default function AddStudent() {
+  const [form, setForm] = useState({
+    name: "",
+    fatherName: "",
+    overallSerial: "",
+    departmentSerial: "",
+    batch: "",
+    semester: "",
+    discipline: "RADIOLOGY",
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
   const [lastCreds, setLastCreds] = useState(null);
 
-  const [form, setForm] = useState({
-  name: "",
-  dob: "",              // ✅ ADD
-  gender: "",           // ✅ ADD
-  class: "",
-  section: "",
-  rollNumber: "",
-  address: "",          // ✅ ADD
-
-  loginId: "",
-  studentPassword: "",
-
-  parentName: "",
-  parentPhone: "",
-  parentPassword: ""
-});
-
-
-  const nav = useNavigate();
-
-  useEffect(() => {
-    loadClasses();
-  }, []);
-
-  const loadClasses = async () => {
-    const { data } = await api.get("/students");
-    const classList = [...new Set(data.map((s) => s.class))];
-    setClasses(classList);
+  const update = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const loadStudentsByClass = async (className) => {
-    setCurrentClass(className);
-    const { data } = await api.get(`/students/class/${className}`);
-    setStudents(data);
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const { data } = await api.post("/students", form);
+      setLastCreds(data.credentials || null);
+      setMessage(data.message || "STUDENT ADDED SUCCESSFULLY");
+      setForm({
+        name: "",
+        fatherName: "",
+        overallSerial: "",
+        departmentSerial: "",
+        batch: "",
+        semester: "",
+        discipline: "RADIOLOGY",
+      });
+    } catch (error) {
+      setMessage(error.response?.data?.message || "FAILED TO ADD STUDENT");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const add = async (e) => {
-    e.preventDefault();
-    console.log("ADD FUNCTION TRIGGERED", form); // DEBUG
-
-    const body = {
-      name: form.name,
-      dob: form.dob,  
-      gender: form.gender,
-      address: form.address,
-      class: form.class,
-      section: form.section,
-      rollNumber: form.rollNumber,
-      loginId: form.loginId,
-      studentPassword: form.studentPassword,
-      parentName: form.parentName,
-      parentPhone: form.parentPhone,
-      parentPassword: form.parentPassword,
-    };
-
-    const { data } = await api.post("/students", body);
-
-    setLastCreds(data.credentials || null);
-
-    setForm({
-  name: "",
-  dob: "",
-  gender: "",
-  class: "",
-  section: "",
-  rollNumber: "",
-  address: "",
-  loginId: "",
-  studentPassword: "",
-  parentName: "",
-  parentPhone: "",
-  parentPassword: ""
-});
-
-
-    loadClasses();
-  };
-
-  const removeStudent = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this student?"))
-      return;
-    await api.delete(`/students/${id}`);
-    if (currentClass) loadStudentsByClass(currentClass);
-    else loadClasses();
-  };
-
-  const filteredStudents = students.filter((s) => {
-    const q = search.toLowerCase();
-    return (
-      s.name.toLowerCase().includes(q) ||
-      (s.rollNumber && s.rollNumber.toString().includes(q))
-    );
-  });
+  const program = selectedProgram(form.discipline);
 
   return (
-    <div className="container">
-      <h2>Students</h2>
-
-      {/* Add Student Form */}
-      <form onSubmit={add} className="card">
-        <input
-          placeholder="Student Name"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
-        />
-
-        <input
-          type="date"
-          placeholder="Date of Birth"
-          value={form.dob}
-          onChange={(e) => setForm({ ...form, dob: e.target.value })}
-          required
-        />
-
-        <select
-          value={form.gender}
-          onChange={(e) => setForm({ ...form, gender: e.target.value })}
-          required
-        >
-          <option value="">Select Gender</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-          <option value="other">Other</option>
-        </select>
-
-        <input
-          placeholder="Class"
-          value={form.class}
-          onChange={(e) => setForm({ ...form, class: e.target.value })}
-          required
-        />
-
-        <input
-          placeholder="Section"
-          value={form.section}
-          onChange={(e) => setForm({ ...form, section: e.target.value })}
-          required
-        />
-
-        <input
-          placeholder="Roll Number"
-          value={form.rollNumber}
-          onChange={(e) => setForm({ ...form, rollNumber: e.target.value })}
-          required
-        />
-
-        <input
-          placeholder="Address"
-          value={form.address}
-          onChange={(e) => setForm({ ...form, address: e.target.value })}
-          required
-        />
-
-        <input
-          placeholder="Student Login ID"
-          value={form.loginId}
-          onChange={(e) => setForm({ ...form, loginId: e.target.value })}
-          required
-        />
-
-        <input
-          type="password"
-          placeholder="Student Password"
-          value={form.studentPassword}
-          onChange={(e) =>
-            setForm({ ...form, studentPassword: e.target.value })
-          }
-          required
-        />
-
-        {/* Parent section */}
-        <h4>Parent Information</h4>
-
-        <input
-          placeholder="Parent Name"
-          value={form.parentName}
-          onChange={(e) => setForm({ ...form, parentName: e.target.value })}
-          required
-        />
-
-        <input
-          placeholder="Parent Phone"
-          value={form.parentPhone}
-          onChange={(e) => setForm({ ...form, parentPhone: e.target.value })}
-          required
-        />
-
-        <input
-          type="password"
-          placeholder="Parent Password"
-          value={form.parentPassword}
-          onChange={(e) => setForm({ ...form, parentPassword: e.target.value })}
-          required
-        />
-
-        <button type="submit">Add Student</button>
-      </form>
-
-      {/* Show last created credentials */}
-      {lastCreds && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h4>Last Created Credentials</h4>
-          <p>
-            Student Enrollment: <b>{lastCreds.loginId}</b>
-          </p>
-          <p>
-            Student Password: <b>{lastCreds.studentPassword}</b>
-          </p>
-          {lastCreds.parentLoginId && (
-            <>
-              <p>
-                Parent Login Id: <b>{lastCreds.parentLoginId}</b>
-              </p>
-              <p>
-                Parent Password: <b>{lastCreds.parentPassword}</b>
-              </p>
-            </>
-          )}
+    <div className="container entry-page">
+      <div className="entry-header">
+        <div>
+          <p className="eyebrow">TPIHS STUDENT ENTRY</p>
+          <h2>ADD STUDENT</h2>
         </div>
-      )}
-
-      <h3>Classes</h3>
-      <div style={{ marginBottom: 15 }}>
-        {classes.map((c) => (
-          <button
-            key={c}
-            onClick={() => loadStudentsByClass(c)}
-            style={{
-              marginRight: 10,
-              background: currentClass === c ? "#3b82f6" : "#ddd",
-              color: currentClass === c ? "white" : "black",
-            }}
-          >
-            Class {c}
-          </button>
-        ))}
+        <Link className="link-action primary-action" to="/admin/students/list">
+          VIEW STUDENTS
+        </Link>
       </div>
 
-      {currentClass && (
-        <>
-          <h3>Students of Class {currentClass}</h3>
-          <input
-            placeholder="Search by name or roll number"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ marginBottom: 10, padding: 6, width: "100%" }}
-          />
+      <form onSubmit={submit} className="card entry-card">
+        <div className={`entry-strip ${program.className}`}>
+          {program.label} STUDENT RECORD
+        </div>
 
-          <ul>
-            {filteredStudents.map((s) => (
-              <li
-                key={s._id}
-                style={{
-                  marginBottom: 8,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <button
-                  onClick={() => nav(`/student/${s._id}`)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    fontSize: 16,
-                    cursor: "pointer",
-                    color: "#007bff",
-                  }}
-                >
-                  {s.rollNumber}. {s.name}
-                </button>
+        <div className="form-grid">
+          <label>
+            <span>OVERALL SERIAL NO</span>
+            <input
+              min="1"
+              placeholder="FIRST TO LAST SERIAL"
+              type="number"
+              value={form.overallSerial}
+              onChange={(event) => update("overallSerial", event.target.value)}
+              required
+            />
+          </label>
 
-                <button
-                  onClick={() => removeStudent(s._id)}
-                  style={{ marginLeft: 10 }}
-                >
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
+          <label>
+            <span>DEPARTMENT SERIAL NO</span>
+            <input
+              min="1"
+              placeholder="DEPARTMENT-WISE SERIAL"
+              type="number"
+              value={form.departmentSerial}
+              onChange={(event) => update("departmentSerial", event.target.value)}
+              required
+            />
+          </label>
 
-          {filteredStudents.length === 0 && <p>No students found</p>}
-        </>
+          <label>
+            <span>STUDENT NAME</span>
+            <input
+              placeholder="ENTER STUDENT NAME"
+              value={form.name}
+              onChange={(event) => update("name", event.target.value.toUpperCase())}
+              required
+            />
+          </label>
+
+          <label>
+            <span>FATHER NAME</span>
+            <input
+              placeholder="ENTER FATHER NAME"
+              value={form.fatherName}
+              onChange={(event) => update("fatherName", event.target.value.toUpperCase())}
+              required
+            />
+          </label>
+
+          <label>
+            <span>BATCH</span>
+            <select
+              value={form.batch}
+              onChange={(event) => update("batch", event.target.value)}
+              required
+            >
+              <option value="">SELECT BATCH</option>
+              {BATCHES.map((batch) => (
+                <option key={batch} value={batch}>
+                  {batch}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>SEMESTER</span>
+            <select
+              value={form.semester}
+              onChange={(event) => update("semester", event.target.value)}
+              required
+            >
+              <option value="">SELECT SEMESTER</option>
+              {SEMESTERS.map((semester) => (
+                <option key={semester} value={semester}>
+                  {semester}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>DISCIPLINE</span>
+            <select
+              className={`program-select ${program.className}`}
+              value={form.discipline}
+              onChange={(event) => update("discipline", event.target.value)}
+              required
+            >
+              {PROGRAMS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <button className="primary-action submit-wide" type="submit" disabled={saving}>
+          {saving ? "ADDING STUDENT..." : "ADD STUDENT AND GENERATE LOGIN"}
+        </button>
+      </form>
+
+      {message && <div className="card status-card">{message.toUpperCase()}</div>}
+
+      {lastCreds && (
+        <div className="credentials-grid">
+          <div className="credential-card">
+            <span>USERNAME</span>
+            <strong>{lastCreds.loginId}</strong>
+          </div>
+          <div className="credential-card">
+            <span>PASSWORD</span>
+            <strong>{lastCreds.studentPassword}</strong>
+          </div>
+        </div>
       )}
     </div>
   );
