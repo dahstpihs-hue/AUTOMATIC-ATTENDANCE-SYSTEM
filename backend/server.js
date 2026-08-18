@@ -46,7 +46,12 @@ app.use("/api/academic", require("./routes/academic"));
 
 console.log("Connected to Supabase Database Layer ✔️");
 
+// Export app for serverless execution
+module.exports = app;
+
 // Express server ko port 8080 par run kar rahe hain
-app.listen(8080, () => {
-  console.log("Server is listening at http://localhost:8080");
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(8080, () => {
+    console.log("Server is listening at http://localhost:8080");
+  });
+}
