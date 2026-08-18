@@ -28,7 +28,13 @@ const DEPARTMENTS = [
 ];
 
 export default function Login() {
-  const { user, signInWithGoogle } = useAuth();
+  const { user, signInWithGoogle, sendOtp, verifyOtp } = useAuth();
+  const [loginMethod, setLoginMethod] = useState("email"); // "email" or "phone"
+  const [inputValue, setInputValue] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [timer, setTimer] = useState(0);
+
   const [loginMessage, setLoginMessage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -37,6 +43,7 @@ export default function Login() {
   const nav = useNavigate();
   const fullText = "THIS PORTAL IS DEVELOPED BY MUHAMMAD FAROOQ";
 
+  // Typing effect footer
   useEffect(() => {
     let index = 0;
     const interval = setInterval(() => {
@@ -51,7 +58,17 @@ export default function Login() {
     return () => clearInterval(interval);
   }, []);
 
-  // Listen to AuthContext user changes and redirect accordingly
+  // Resend OTP timer countdown
+  useEffect(() => {
+    if (timer > 0) {
+      const interval = setInterval(() => {
+        setTimer(prev => prev - 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [timer]);
+
+  // Auth context redirect listener
   useEffect(() => {
     if (user) {
       setLoginMessage({
@@ -78,6 +95,57 @@ export default function Login() {
     }
   }, [user, nav]);
 
+  // Handler to request OTP code
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    if (!inputValue) return;
+    setLoginMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const email = loginMethod === "email" ? inputValue.trim().toLowerCase() : null;
+      const phone = loginMethod === "phone" ? inputValue.trim() : null;
+      
+      await sendOtp({ email, phone });
+      
+      setOtpSent(true);
+      setTimer(60);
+      setLoginMessage({
+        type: "success",
+        text: `A 6-digit passcode has been sent to ${inputValue}!`
+      });
+    } catch (err) {
+      setLoginMessage({
+        type: "error",
+        text: err.message || "Failed to send passcode. Please try again."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handler to verify OTP code
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!otpCode) return;
+    setLoginMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const email = loginMethod === "email" ? inputValue.trim().toLowerCase() : null;
+      const phone = loginMethod === "phone" ? inputValue.trim() : null;
+      
+      await verifyOtp({ email, phone, token: otpCode.trim() });
+    } catch (err) {
+      setLoginMessage({
+        type: "error",
+        text: err.message || "Invalid or expired passcode. Please try again."
+      });
+      setIsSubmitting(false);
+    }
+  };
+
+  // Google Single Sign-On Fallback
   const handleGoogleLogin = async (e) => {
     e.preventDefault();
     setLoginMessage(null);
@@ -102,14 +170,6 @@ export default function Login() {
           0% { transform: rotate(0.8deg); }
           100% { transform: rotate(-0.8deg); }
         }
-        @keyframes colorCycle {
-          0% { color: #2dd4bf; text-shadow: 0 0 6px #2dd4bf; }
-          25% { color: #38bdf8; text-shadow: 0 0 6px #38bdf8; }
-          50% { color: #a855f7; text-shadow: 0 0 6px #a855f7; }
-          75% { color: #f472b6; text-shadow: 0 0 6px #f472b6; }
-          100% { color: #2dd4bf; text-shadow: 0 0 6px #2dd4bf; }
-        }
-
         .hanging-card-0 {
           animation: swing 3s ease-in-out infinite alternate;
           transform-origin: top center;
@@ -119,10 +179,7 @@ export default function Login() {
           backdrop-filter: blur(12px);
           transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease !important;
         }
-        .hanging-card-0 h3 {
-          color: #fbbf24 !important;
-          text-shadow: 0 0 8px rgba(251, 191, 36, 0.95) !important;
-        }
+        .hanging-card-0 h3 { color: #fbbf24 !important; text-shadow: 0 0 8px rgba(251, 191, 36, 0.95) !important; }
         .hanging-card-0:hover {
           transform: translateY(-8px) scale(1.03) !important;
           box-shadow: 0 0 16px #fbbf24, 0 0 36px rgba(245, 158, 11, 0.9), inset 0 0 16px rgba(245, 158, 11, 0.5) !important;
@@ -138,10 +195,7 @@ export default function Login() {
           backdrop-filter: blur(12px);
           transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease !important;
         }
-        .hanging-card-1 h3 {
-          color: #38bdf8 !important;
-          text-shadow: 0 0 8px rgba(56, 189, 248, 0.95) !important;
-        }
+        .hanging-card-1 h3 { color: #38bdf8 !important; text-shadow: 0 0 8px rgba(56, 189, 248, 0.95) !important; }
         .hanging-card-1:hover {
           transform: translateY(-8px) scale(1.03) !important;
           box-shadow: 0 0 16px #38bdf8, 0 0 36px rgba(56, 189, 248, 0.9), inset 0 0 16px rgba(56, 189, 248, 0.5) !important;
@@ -157,63 +211,102 @@ export default function Login() {
           backdrop-filter: blur(12px);
           transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease !important;
         }
-        .hanging-card-2 h3 {
-          color: #c084fc !important;
-          text-shadow: 0 0 8px rgba(192, 132, 252, 0.95) !important;
-        }
+        .hanging-card-2 h3 { color: #c084fc !important; text-shadow: 0 0 8px rgba(192, 132, 252, 0.95) !important; }
         .hanging-card-2:hover {
           transform: translateY(-8px) scale(1.03) !important;
           box-shadow: 0 0 16px #c084fc, 0 0 36px rgba(168, 85, 247, 0.9), inset 0 0 16px rgba(168, 85, 247, 0.5) !important;
           border-color: #d8b4fe !important;
         }
 
-        .google-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
+        .otp-tab {
+          flex: 1;
+          padding: 12px;
+          background: transparent;
+          border: none;
+          color: #9ca3af;
+          font-weight: 700;
+          font-size: 0.9rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          border-bottom: 2px solid rgba(255,255,255,0.08);
+          letter-spacing: 0.5px;
+        }
+        .otp-tab.active {
+          color: #38bdf8;
+          border-bottom: 2px solid #38bdf8;
+          background: rgba(56, 189, 248, 0.04);
+        }
+
+        .action-btn {
           width: 100%;
-          padding: 14px 20px;
+          padding: 14px;
           border-radius: 8px;
           border: 2px solid #38bdf8;
           background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
           color: #fff;
           font-weight: 800;
-          font-size: 1.05rem;
+          font-size: 1rem;
           cursor: pointer;
           text-transform: uppercase;
           letter-spacing: 1px;
           box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
           transition: all 0.3s ease;
         }
-        .google-btn:hover {
+        .action-btn:hover {
           background: linear-gradient(135deg, #0284c7 0%, #0d9488 50%, #6d28d9 100%);
           box-shadow: 0 0 20px rgba(56, 189, 248, 0.7);
           transform: translateY(-2px);
         }
-        .google-btn:active {
-          transform: translateY(1px);
+        .action-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .google-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          width: 100%;
+          padding: 10px;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.15);
+          background: rgba(255, 255, 255, 0.05);
+          color: #e5e7eb;
+          font-weight: 700;
+          font-size: 0.88rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+        .google-btn:hover {
+          background: rgba(255, 255, 255, 0.12);
+          border-color: #38bdf8;
+        }
+
+        .portal-input {
+          width: 100%;
+          padding: 14px;
+          border-radius: 8px;
+          background: rgba(0, 0, 0, 0.5);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          color: #fff;
+          font-size: 1rem;
+          outline: none;
+          box-sizing: border-box;
+          text-align: center;
+          transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .portal-input:focus {
+          border-color: #38bdf8;
+          box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
         }
 
         @media (max-width: 860px) {
-          .responsive-row {
-            grid-template-columns: 1fr !important;
-            gap: 12px !important;
-          }
-          .hanging-card-0, .hanging-card-1, .hanging-card-2 {
-            animation: none !important;
-            margin-top: 4px !important;
-          }
-          .wire-link, .main-wire, .ind-wire {
-            display: none !important;
-          }
-          .viewport-fit {
-            height: auto !important;
-            overflow-y: auto !important;
-          }
-          .login-card-wrapper {
-            padding: 20px 24px !important;
-          }
+          .responsive-row { grid-template-columns: 1fr !important; gap: 12px !important; }
+          .hanging-card-0, .hanging-card-1, .hanging-card-2 { animation: none !important; margin-top: 4px !important; }
+          .wire-link, .main-wire, .ind-wire { display: none !important; }
+          .viewport-fit { height: auto !important; overflow-y: auto !important; }
+          .login-card-wrapper { padding: 20px !important; }
         }
       `}</style>
       
@@ -238,7 +331,6 @@ export default function Login() {
         <div className="responsive-row" style={styles.cardsRow}>
           {DEPARTMENTS.map((dept, idx) => (
             <div key={idx} style={styles.deptCard} className={`hanging-card-${idx} hover-lift`}>
-              {/* Individual hanger wire */}
               <div className="ind-wire" style={styles.individualWire} />
               
               <div style={styles.cardHeader}>
@@ -253,28 +345,107 @@ export default function Login() {
         {/* PORTAL ACCESS WIRE LINK */}
         <div className="wire-link" style={styles.loginWireLink} />
 
-        {/* CENTRAL LOGIN BOX (Google OAuth Only) */}
+        {/* CENTRAL LOGIN BOX (OTP Engine) */}
         <div className="login-card-wrapper" style={styles.loginWrapper}>
           <div style={styles.loginHeader}>
             <h2 style={styles.loginTitle}>PORTAL ACCESS</h2>
-            <p style={styles.loginSubtitle}>Sign in securely using your official Google Account</p>
+            <p style={styles.loginSubtitle}>Receive and verify a secure passcode to access your dashboard</p>
           </div>
 
+          {/* OTP METHOD TAB BAR */}
+          {!otpSent && (
+            <div style={{ display: "flex", gap: "2px", marginBottom: "20px" }}>
+              <button 
+                type="button" 
+                onClick={() => { setLoginMethod("email"); setInputValue(""); }} 
+                className={`otp-tab ${loginMethod === "email" ? "active" : ""}`}
+              >
+                📧 Gmail OTP
+              </button>
+              <button 
+                type="button" 
+                onClick={() => { setLoginMethod("phone"); setInputValue(""); }} 
+                className={`otp-tab ${loginMethod === "phone" ? "active" : ""}`}
+              >
+                📱 Contact OTP
+              </button>
+            </div>
+          )}
+
           <div style={styles.loginForm}>
-            <button
-              onClick={handleGoogleLogin}
-              disabled={isSubmitting}
-              className="google-btn"
-              id="google-login-btn"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-              </svg>
-              {isSubmitting ? "Redirecting to Google..." : "Continue with Gmail"}
-            </button>
+            
+            {/* STEP 1: INPUT GMAIL OR PHONE */}
+            {!otpSent ? (
+              <form onSubmit={handleSendOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <label style={styles.inputLabel}>
+                    {loginMethod === "email" ? "GMAIL ADDRESS" : "CONTACT PHONE NUMBER"}
+                  </label>
+                  <input
+                    type={loginMethod === "email" ? "email" : "tel"}
+                    placeholder={loginMethod === "email" ? "e.g. name@gmail.com" : "e.g. +923001234567"}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    className="portal-input"
+                    required
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="action-btn"
+                  id="send-otp-btn"
+                >
+                  {isSubmitting ? "Sending Passcode..." : "Send Passcode"}
+                </button>
+              </form>
+            ) : (
+              /* STEP 2: VERIFY OTP PASSCODE */
+              <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <label style={styles.inputLabel}>ENTER 6-DIGIT PASSCODE</label>
+                  <input
+                    type="text"
+                    maxLength="6"
+                    placeholder="••••••"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    className="portal-input"
+                    style={{ fontSize: "1.5rem", letterSpacing: "8px" }}
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="action-btn"
+                  id="verify-otp-btn"
+                >
+                  {isSubmitting ? "Verifying..." : "Verify & Sign In"}
+                </button>
+
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", marginTop: "4px" }}>
+                  <button
+                    type="button"
+                    onClick={() => { setOtpSent(false); setOtpCode(""); setLoginMessage(null); }}
+                    style={{ background: "transparent", border: "none", color: "#38bdf8", cursor: "pointer", padding: 0 }}
+                  >
+                    ⬅ Change email/phone
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={timer > 0}
+                    style={{ background: "transparent", border: "none", color: timer > 0 ? "#6b7280" : "#38bdf8", cursor: timer > 0 ? "not-allowed" : "pointer", padding: 0 }}
+                  >
+                    {timer > 0 ? `Resend in ${timer}s` : "Resend Passcode"}
+                  </button>
+                </div>
+              </form>
+            )}
 
             {loginMessage && (
               <div style={{
@@ -287,10 +458,36 @@ export default function Login() {
               </div>
             )}
 
+            {/* SEPARATOR */}
+            {!otpSent && (
+              <>
+                <div style={styles.divider}>
+                  <span style={styles.dividerLine} />
+                  <span style={styles.dividerText}>OR</span>
+                  <span style={styles.dividerLine} />
+                </div>
+
+                {/* GOOGLE SSO ALTERNATIVE */}
+                <button
+                  onClick={handleGoogleLogin}
+                  disabled={isSubmitting}
+                  className="google-btn"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                  </svg>
+                  Sign In with Google Account
+                </button>
+              </>
+            )}
+
             <div style={styles.alertBox}>
               <span style={{ fontSize: "1.1rem" }}>⚠️</span>
               <span>
-                <strong>Access Note:</strong> Only registered Gmail IDs are permitted access. If your account is not linked yet, please coordinate with the Academic HOD.
+                <strong>Privacy & Access:</strong> Faculty and HOD accounts should be pre-registered with their official emails or contact numbers to verify authorization dynamically.
               </span>
             </div>
           </div>
@@ -350,8 +547,8 @@ const styles = {
     width: "100%"
   },
   glowingBox: {
-    background: "#3A110E", // Fully dark red-brown colored box
-    border: "2px solid #fbbf24", // Golden / Yellow border
+    background: "#3A110E",
+    border: "2px solid #fbbf24",
     borderRadius: "10px",
     padding: "12px 28px",
     boxShadow: "0 6px 20px rgba(58, 17, 14, 0.8), 0 0 15px rgba(250, 204, 21, 0.5), inset 0 0 10px rgba(250, 204, 21, 0.2)",
@@ -461,11 +658,11 @@ const styles = {
     borderRadius: "14px",
     border: "2px solid rgba(56, 189, 248, 0.35)",
     boxShadow: "0 15px 40px rgba(0, 0, 0, 0.7)",
-    padding: "32px"
+    padding: "24px 32px 32px 32px"
   },
   loginHeader: {
     textAlign: "center",
-    marginBottom: "24px"
+    marginBottom: "20px"
   },
   loginTitle: {
     fontSize: "1.5rem",
@@ -477,7 +674,7 @@ const styles = {
   loginSubtitle: {
     fontSize: "0.92rem",
     color: "#9ca3af",
-    margin: "8px 0 0 0",
+    margin: "6px 0 0 0",
     lineHeight: "1.4"
   },
   loginForm: {
@@ -485,15 +682,41 @@ const styles = {
     flexDirection: "column",
     gap: "16px"
   },
+  inputLabel: {
+    display: "block",
+    fontSize: "0.75rem",
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.6)",
+    marginBottom: "6px",
+    letterSpacing: "0.5px"
+  },
+  divider: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "16px",
+    margin: "12px 0 4px 0"
+  },
+  dividerLine: {
+    flex: 1,
+    height: "1px",
+    background: "rgba(255,255,255,0.12)"
+  },
+  dividerText: {
+    fontSize: "0.78rem",
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.35)",
+    letterSpacing: "1px"
+  },
   alertBox: {
     display: "flex",
     gap: "12px",
     padding: "12px 16px",
     borderRadius: "8px",
-    backgroundColor: "rgba(239, 68, 68, 0.08)",
-    border: "1px solid rgba(239, 68, 68, 0.25)",
+    backgroundColor: "rgba(251, 191, 36, 0.05)",
+    border: "1px solid rgba(251, 191, 36, 0.2)",
     fontSize: "0.82rem",
-    color: "#fca5a5",
+    color: "#fde047",
     lineHeight: "1.45",
     marginTop: "8px"
   },

@@ -25,24 +25,55 @@ module.exports = (roles = []) => {
       }
 
       // 2. Fetch the corresponding profile from users table
-      let { data: dbUser, error: dbError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("email", user.email)
-        .maybeSingle();
+      let dbUser = null;
+      let dbError = null;
 
-      if (dbError) {
-        return res.status(500).json({ message: "Database lookup failed", error: dbError.message });
+      if (user.email) {
+        let { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("email", user.email)
+          .maybeSingle();
+        dbUser = data;
+        dbError = error;
       }
 
-      // Fallback: If no email match, try looking up by auth_id (in case of changes)
+      // If no match by email and user has a phone, look up by phone number
+      if (!dbUser && user.phone) {
+        let { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("parent_phone", user.phone)
+          .maybeSingle();
+        dbUser = data;
+        dbError = error;
+
+        // Try local phone normalization (e.g. +923001234567 -> 03001234567)
+        if (!dbUser) {
+          const localPhone = user.phone.replace("+92", "0");
+          let { data: dataLocal, error: errorLocal } = await supabase
+            .from("users")
+            .select("*")
+            .eq("parent_phone", localPhone)
+            .maybeSingle();
+          dbUser = dataLocal;
+          dbError = errorLocal || dbError;
+        }
+      }
+
+      // Fallback: If no match, try looking up by auth_id
       if (!dbUser) {
-        let { data: dbUserByAuth } = await supabase
+        let { data, error } = await supabase
           .from("users")
           .select("*")
           .eq("auth_id", user.id)
           .maybeSingle();
-        dbUser = dbUserByAuth;
+        dbUser = data;
+        dbError = error || dbError;
+      }
+
+      if (dbError) {
+        return res.status(500).json({ message: "Database lookup failed", error: dbError.message });
       }
 
       if (!dbUser) {
@@ -52,9 +83,10 @@ module.exports = (roles = []) => {
           .insert({
             id: user.id,
             auth_id: user.id,
-            name: user.user_metadata?.full_name || user.email.split("@")[0],
-            email: user.email,
-            login_id: user.email.split("@")[0],
+            name: user.user_metadata?.full_name || (user.email ? user.email.split("@")[0] : `User-${user.phone}`),
+            email: user.email || null,
+            parent_phone: user.phone || null,
+            login_id: user.email ? user.email.split("@")[0] : user.phone,
             role: "pending"
           })
           .select()

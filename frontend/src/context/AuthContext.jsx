@@ -84,6 +84,25 @@ export const AuthProvider = ({ children }) => {
     if (error) throw error;
   };
 
+  const sendOtp = async ({ email, phone }) => {
+    const params = {};
+    if (email) params.email = email.trim().toLowerCase();
+    if (phone) params.phone = phone.trim();
+
+    const { error } = await supabase.auth.signInWithOtp(params);
+    if (error) throw error;
+  };
+
+  const verifyOtp = async ({ email, phone, token }) => {
+    const params = { token, type: email ? "email" : "sms" };
+    if (email) params.email = email.trim().toLowerCase();
+    if (phone) params.phone = phone.trim();
+
+    const { data, error } = await supabase.auth.verifyOtp(params);
+    if (error) throw error;
+    return data;
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     sessionStorage.removeItem("token");
@@ -93,7 +112,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, sendOtp, verifyOtp, logout }}>
       {children}
     </AuthContext.Provider>
   );
