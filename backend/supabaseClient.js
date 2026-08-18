@@ -14,8 +14,10 @@ let supabase;
 if (isPlaceholder) {
   console.log("⚠️  [TPIHS LOCAL MODE] USING FILE-BASED JSON DATABASE (NO EXTERNAL DB OR INTERNET REQUIRED)");
 
-  const DATA_DIR = path.join(__dirname, "data");
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
+  const DATA_DIR = process.env.VERCEL
+    ? path.join("/tmp", "data")
+    : path.join(__dirname, "data");
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
   const readTable = (table) => {
     if (table === "lectures_view" || table === "defaulters_view") return [];
