@@ -77,7 +77,17 @@ module.exports = (roles = []) => {
       }
 
       if (!dbUser) {
-        // Auto-register as pending user
+        // Check if there are any other real admins in the system
+        const { data: realAdmins } = await supabase
+          .from("users")
+          .select("id")
+          .eq("role", "admin")
+          .neq("email", "admin@school.com");
+
+        // The first real user signing up automatically becomes HOD (Admin)
+        const initialRole = (!realAdmins || realAdmins.length === 0) ? "admin" : "pending";
+
+        // Auto-register user
         const { data: newUser, error: registerErr } = await supabase
           .from("users")
           .insert({
@@ -87,7 +97,7 @@ module.exports = (roles = []) => {
             email: user.email || null,
             parent_phone: user.phone || null,
             login_id: user.email ? user.email.split("@")[0] : user.phone,
-            role: "pending"
+            role: initialRole
           })
           .select()
           .single();
